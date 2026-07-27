@@ -9,6 +9,7 @@ export interface CameraDevice {
 
 interface UseCameraResult {
   videoRef: (node: HTMLVideoElement | null) => void
+  videoElement: HTMLVideoElement | null
   stream: MediaStream | null
   status: CameraStatus
   error: string | null
@@ -54,6 +55,7 @@ export function useCamera(): UseCameraResult {
   const [devices, setDevices] = useState<CameraDevice[]>([])
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null)
   const [isMirrored, setIsMirrored] = useState(false)
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null)
 
   const attachStream = useCallback((mediaStream: MediaStream) => {
     streamRef.current = mediaStream
@@ -151,6 +153,7 @@ export function useCamera(): UseCameraResult {
   const setVideoRef = useCallback(
     (node: HTMLVideoElement | null) => {
       videoRef.current = node
+      setVideoElement(node)
       if (node && streamRef.current) {
         node.srcObject = streamRef.current
         void node.play().catch(() => {})
@@ -214,6 +217,7 @@ export function useCamera(): UseCameraResult {
 
   return {
     videoRef: setVideoRef,
+    videoElement,
     stream,
     status,
     error,

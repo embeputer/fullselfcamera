@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CameraSwitcher } from './components/CameraSwitcher'
+import { CVDebugOverlay } from './components/CVDebugOverlay'
 import { CameraFeed } from './components/CameraFeed'
 import { FSDOverlay } from './components/FSDOverlay'
+import { LaneStatusHUD } from './components/LaneStatusHUD'
 import { SpeedHUD } from './components/SpeedHUD'
 import { StartScreen } from './components/StartScreen'
 import { TurnHUD } from './components/TurnHUD'
-import { createPathEngine } from './engines'
+import type { LaneDetectionResult } from './cv/types'
+import {
+  createPathEngine,
+  CVPathEngine,
+  isDebugCV,
+  parseEngineType,
+  type EngineType,
+} from './engines'
 import { useCamera } from './hooks/useCamera'
 import { usePathLoop } from './hooks/usePathLoop'
 
@@ -13,11 +22,16 @@ type AppPhase = 'start' | 'driving'
 
 function App() {
   const [phase, setPhase] = useState<AppPhase>('start')
-  const engineRef = useRef(createPathEngine('demo'))
+  const engineType: EngineType = parseEngineType()
+  const engineRef = useRef(createPathEngine(engineType))
   const [engineReady, setEngineReady] = useState(false)
+  const [debugDetection, setDebugDetection] = useState<LaneDetectionResult | null>(null)
+  const debugCV = isDebugCV()
+  const isCV = engineType === 'cv'
 
   const {
     videoRef,
+    videoElement,
     status,
     error,
     isMirrored,
@@ -31,7 +45,19 @@ function App() {
   const pathState = usePathLoop(
     engineReady ? engineRef.current : null,
     active,
+    videoElement,
+    isCV,
   )
+
+  useEffect(() => {
+    if (!debugCV || !(engineRef.current instanceof CVPathEngine)) return
+    const id = setInterval(() => {
+      setDebugDetection(engineRef.current instanceof CVPathEngine
+        ? engineRef.current.getLastDetection()
+        : null)
+    }, 100)
+    return () => clearInterval(id)
+  }, [debugCV, engineReady])
 
   useEffect(() => {
     engineRef.current.init().then(() => setEngineReady(true))
@@ -70,6 +96,7 @@ function App() {
       {status === 'active' && (
         <>
           <FSDOverlay pathState={pathState} />
+          {debugCV && <CVDebugOverlay detection={debugDetection} />}
 
           <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
             <div className="flex items-start justify-between gap-4">
@@ -83,6 +110,7 @@ function App() {
             </div>
 
             <div className="pointer-events-auto flex items-center justify-center gap-3">
+              {isCV && <LaneStatusHUD confidence={pathState.confidence} />}
               <CameraSwitcher
                 devices={devices}
                 activeDeviceId={activeDeviceId}

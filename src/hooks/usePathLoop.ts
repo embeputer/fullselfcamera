@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PROC_H, PROC_W } from '../cv/laneDetector'
 import type { PathEngine, PathState } from '../types/path'
 
 const DEFAULT_STATE: PathState = {
@@ -6,19 +7,36 @@ const DEFAULT_STATE: PathState = {
   speedSignal: 'maintain',
   turnSignal: 'straight',
   turnAngle: 0,
-  confidence: 1,
+  confidence: 0,
 }
+
+const CAPTURE_INTERVAL_MS = 100
 
 export function usePathLoop(
   engine: PathEngine | null,
   active: boolean,
+  videoElement: HTMLVideoElement | null,
+  needsFrames = true,
 ): PathState {
   const [pathState, setPathState] = useState<PathState>(DEFAULT_STATE)
   const lastTimeRef = useRef<number | null>(null)
+  const lastCaptureRef = useRef(0)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const imageDataRef = useRef<ImageData | null>(null)
+
+  useEffect(() => {
+    if (!needsFrames) return
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement('canvas')
+      canvasRef.current.width = PROC_W
+      canvasRef.current.height = PROC_H
+    }
+  }, [needsFrames])
 
   useEffect(() => {
     if (!engine || !active) {
       lastTimeRef.current = null
+      lastCaptureRef.current = 0
       return
     }
 
@@ -28,7 +46,29 @@ export function usePathLoop(
       const last = lastTimeRef.current ?? now
       const deltaMs = now - last
       lastTimeRef.current = now
-      setPathState(engine.update(deltaMs))
+
+      let frame: ImageData | undefined
+      if (
+        needsFrames &&
+        videoElement &&
+        videoElement.videoWidth > 0 &&
+        now - lastCaptureRef.current >= CAPTURE_INTERVAL_MS
+      ) {
+        lastCaptureRef.current = now
+        const canvas = canvasRef.current
+        const ctx = canvas?.getContext('2d', { willReadFrequently: true })
+        if (canvas && ctx) {
+          ctx.drawImage(videoElement, 0, 0, PROC_W, PROC_H)
+          if (!imageDataRef.current) {
+            imageDataRef.current = ctx.getImageData(0, 0, PROC_W, PROC_H)
+          } else {
+            ctx.getImageData(0, 0, PROC_W, PROC_H, imageDataRef.current)
+          }
+          frame = imageDataRef.current
+        }
+      }
+
+      setPathState(engine.update(deltaMs, frame))
       rafId = requestAnimationFrame(tick)
     }
 
@@ -38,7 +78,7 @@ export function usePathLoop(
       cancelAnimationFrame(rafId)
       lastTimeRef.current = null
     }
-  }, [engine, active])
+  }, [engine, active, videoElement, needsFrames])
 
   return pathState
 }

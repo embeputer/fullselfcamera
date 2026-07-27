@@ -1,14 +1,26 @@
 import type { PathEngine } from '../types/path'
+import { CVPathEngine } from './CVPathEngine'
 import { DemoPathEngine } from './DemoPathEngine'
 
-export type EngineType = 'demo'
+export type EngineType = 'cv' | 'demo'
 
-export function createPathEngine(type: EngineType = 'demo'): PathEngine {
+export function createPathEngine(type: EngineType = 'cv'): PathEngine {
   switch (type) {
     case 'demo':
-    default:
       return new DemoPathEngine()
+    case 'cv':
+    default:
+      return new CVPathEngine()
   }
 }
 
-export { DemoPathEngine }
+export function parseEngineType(): EngineType {
+  const param = new URLSearchParams(window.location.search).get('engine')
+  return param === 'demo' ? 'demo' : 'cv'
+}
+
+export function isDebugCV(): boolean {
+  return new URLSearchParams(window.location.search).get('debug') === 'cv'
+}
+
+export { CVPathEngine, DemoPathEngine }

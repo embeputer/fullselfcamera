@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { CONFIDENCE_THRESHOLD } from '../cv/types'
 import type { PathState } from '../types/path'
 import {
   buildPathRibbon,
@@ -88,8 +89,8 @@ export function FSDOverlay({ pathState }: FSDOverlayProps) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, width, height)
 
-    const { points } = pathState
-    if (points.length < 2) return
+    const { points, confidence } = pathState
+    if (points.length < 2 || confidence < CONFIDENCE_THRESHOLD) return
 
     const curvature = curvatureFromPoints(points)
     const ribbon = buildPathRibbon(width, height, curvature)
