@@ -3,7 +3,6 @@ import { detectLanes } from '../cv/laneDetector'
 import type { PathEngine, PathState, TurnSignal } from '../types/path'
 import { generatePathPoints } from '../utils/bezier'
 
-const PROCESS_INTERVAL_MS = 100
 const SMOOTHING = 0.25
 
 function turnFromCurvature(curvature: number): {
@@ -21,7 +20,6 @@ function turnFromCurvature(curvature: number): {
 }
 
 export class CVPathEngine implements PathEngine {
-  private lastProcessTime = 0
   private smoothedOffset = 0
   private smoothedCurvature = 0
   private smoothedConfidence = 0
@@ -35,7 +33,6 @@ export class CVPathEngine implements PathEngine {
   }
 
   async init(): Promise<void> {
-    this.lastProcessTime = 0
     this.smoothedOffset = 0
     this.smoothedCurvature = 0
     this.smoothedConfidence = 0
@@ -54,9 +51,7 @@ export class CVPathEngine implements PathEngine {
   }
 
   update(_deltaMs: number, videoFrame?: ImageData): PathState {
-    const now = performance.now()
-    if (videoFrame && now - this.lastProcessTime >= PROCESS_INTERVAL_MS) {
-      this.lastProcessTime = now
+    if (videoFrame) {
       const detection = detectLanes(videoFrame)
       this.lastDetection = detection
 

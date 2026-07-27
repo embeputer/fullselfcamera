@@ -27,60 +27,66 @@ export function usePathLoop(
 ): PathLoopResult {
   const [pathState, setPathState] = useState<PathState>(DEFAULT_STATE)
   const [cvDetection, setCvDetection] = useState<LaneDetectionResult | null>(null)
-  const lastTimeRef = useRef<number | null>(null)
-  const lastCaptureRef = useRef(0)
+  const engineRef = useRef(engine)
+  const videoRef = useRef(videoElement)
+  const needsFramesRef = useRef(needsFrames)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const imageDataRef = useRef<ImageData | null>(null)
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+
+  engineRef.current = engine
+  videoRef.current = videoElement
+  needsFramesRef.current = needsFrames
 
   useEffect(() => {
-    if (!needsFrames) return
     if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas')
-      canvasRef.current.width = PROC_W
-      canvasRef.current.height = PROC_H
+      const canvas = document.createElement('canvas')
+      canvas.width = PROC_W
+      canvas.height = PROC_H
+      canvasRef.current = canvas
+      ctxRef.current = canvas.getContext('2d', { willReadFrequently: true })
     }
-  }, [needsFrames])
+  }, [])
 
   useEffect(() => {
-    if (!engine || !active) {
-      lastTimeRef.current = null
-      lastCaptureRef.current = 0
-      return
-    }
+    if (!engine || !active) return
 
-    let rafId: number
+    let rafId = 0
+    let lastTick = 0
+    let lastCapture = 0
 
     const tick = (now: number) => {
-      const last = lastTimeRef.current ?? now
-      const deltaMs = now - last
-      lastTimeRef.current = now
+      try {
+        const deltaMs = lastTick ? now - lastTick : 16
+        lastTick = now
 
-      let frame: ImageData | undefined
-      if (
-        needsFrames &&
-        videoElement &&
-        videoElement.videoWidth > 0 &&
-        now - lastCaptureRef.current >= CAPTURE_INTERVAL_MS
-      ) {
-        lastCaptureRef.current = now
+        let frame: ImageData | undefined
+        const video = videoRef.current
+        const ctx = ctxRef.current
         const canvas = canvasRef.current
-        const ctx = canvas?.getContext('2d', { willReadFrequently: true })
-        if (canvas && ctx) {
-          ctx.drawImage(videoElement, 0, 0, PROC_W, PROC_H)
-          if (!imageDataRef.current) {
-            imageDataRef.current = ctx.getImageData(0, 0, PROC_W, PROC_H)
-          } else {
-            ctx.getImageData(0, 0, PROC_W, PROC_H, imageDataRef.current)
-          }
-          frame = imageDataRef.current
+
+        if (
+          needsFramesRef.current &&
+          video &&
+          video.videoWidth > 0 &&
+          canvas &&
+          ctx &&
+          now - lastCapture >= CAPTURE_INTERVAL_MS
+        ) {
+          lastCapture = now
+          ctx.drawImage(video, 0, 0, PROC_W, PROC_H)
+          frame = ctx.getImageData(0, 0, PROC_W, PROC_H)
         }
-      }
 
-      const state = engine.update(deltaMs, frame)
-      setPathState(state)
-
-      if (engine instanceof CVPathEngine) {
-        setCvDetection(engine.getLastDetection())
+        const currentEngine = engineRef.current
+        if (currentEngine) {
+          const state = currentEngine.update(deltaMs, frame)
+          setPathState(state)
+          if (currentEngine instanceof CVPathEngine) {
+            setCvDetection(currentEngine.getLastDetection())
+          }
+        }
+      } catch (err) {
+        console.error('Path loop error:', err)
       }
 
       rafId = requestAnimationFrame(tick)
@@ -90,9 +96,8 @@ export function usePathLoop(
 
     return () => {
       cancelAnimationFrame(rafId)
-      lastTimeRef.current = null
     }
-  }, [engine, active, videoElement, needsFrames])
+  }, [engine, active])
 
   return { pathState, cvDetection }
 }
