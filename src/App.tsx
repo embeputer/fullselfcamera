@@ -7,12 +7,7 @@ import { LaneStatusHUD } from './components/LaneStatusHUD'
 import { SpeedHUD } from './components/SpeedHUD'
 import { StartScreen } from './components/StartScreen'
 import { TurnHUD } from './components/TurnHUD'
-import type { EngineType } from './engines'
-import {
-  createPathEngine,
-  isDebugCV,
-  parseEngineType,
-} from './engines'
+import { createPathEngine, isDebugCV } from './engines'
 import { useCamera } from './hooks/useCamera'
 import { usePathLoop } from './hooks/usePathLoop'
 
@@ -20,11 +15,9 @@ type AppPhase = 'start' | 'driving'
 
 function App() {
   const [phase, setPhase] = useState<AppPhase>('start')
-  const engineType: EngineType = parseEngineType()
-  const engineRef = useRef(createPathEngine(engineType))
+  const engineRef = useRef(createPathEngine())
   const [engineReady, setEngineReady] = useState(false)
   const debugCV = isDebugCV()
-  const isCV = engineType === 'cv'
 
   const {
     videoRef,
@@ -39,11 +32,10 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const { pathState, cvDetection } = usePathLoop(
+  const { pathState, cvDetection, cvObstacle } = usePathLoop(
     engineReady ? engineRef.current : null,
     active,
     videoElement,
-    isCV,
   )
 
   useEffect(() => {
@@ -86,6 +78,7 @@ function App() {
           {debugCV && (
             <CVDebugOverlay
               detection={cvDetection}
+              obstacle={cvObstacle}
               videoElement={videoElement}
             />
           )}
@@ -102,7 +95,11 @@ function App() {
             </div>
 
             <div className="pointer-events-auto flex items-center justify-center gap-3">
-              {isCV && <LaneStatusHUD confidence={pathState.confidence} />}
+              <LaneStatusHUD
+                confidence={pathState.confidence}
+                obstaclePresent={cvObstacle?.present}
+                obstacleSeverity={cvObstacle?.severity}
+              />
               <CameraSwitcher
                 devices={devices}
                 activeDeviceId={activeDeviceId}

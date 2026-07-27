@@ -1,9 +1,20 @@
-import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../cv/types'
+import {
+  CONFIDENCE_THRESHOLD,
+  emptyObstacleResult,
+  type LaneDetectionResult,
+  type ObstacleResult,
+} from '../cv/types'
 import { detectLanes } from '../cv/laneDetector'
+import {
+  detectObstacles,
+  resetObstacleDetector,
+} from '../cv/obstacleDetector'
+import { computeSpeedSignal } from '../cv/speedPolicy'
 import type { PathEngine, PathState, TurnSignal } from '../types/path'
 import { generatePathPoints } from '../utils/bezier'
 
 const SMOOTHING = 0.25
+const SEVERITY_SMOOTHING = 0.3
 
 function turnFromCurvature(curvature: number): {
   signal: TurnSignal
@@ -23,10 +34,12 @@ export class CVPathEngine implements PathEngine {
   private smoothedOffset = 0
   private smoothedCurvature = 0
   private smoothedConfidence = 0
+  private smoothedSeverity = 0
   private lastDetection: LaneDetectionResult | null = null
+  private lastObstacle: ObstacleResult = emptyObstacleResult()
   private lastState: PathState = {
     points: [],
-    speedSignal: 'maintain',
+    speedSignal: 'slow_down',
     turnSignal: 'straight',
     turnAngle: 0,
     confidence: 0,
@@ -36,10 +49,13 @@ export class CVPathEngine implements PathEngine {
     this.smoothedOffset = 0
     this.smoothedCurvature = 0
     this.smoothedConfidence = 0
+    this.smoothedSeverity = 0
     this.lastDetection = null
+    this.lastObstacle = emptyObstacleResult()
+    resetObstacleDetector()
     this.lastState = {
       points: [],
-      speedSignal: 'maintain',
+      speedSignal: 'slow_down',
       turnSignal: 'straight',
       turnAngle: 0,
       confidence: 0,
@@ -48,6 +64,10 @@ export class CVPathEngine implements PathEngine {
 
   getLastDetection(): LaneDetectionResult | null {
     return this.lastDetection
+  }
+
+  getLastObstacle(): ObstacleResult {
+    return this.lastObstacle
   }
 
   update(_deltaMs: number, videoFrame?: ImageData): PathState {
@@ -61,12 +81,17 @@ export class CVPathEngine implements PathEngine {
         (detection.curvature - this.smoothedCurvature) * SMOOTHING
       this.smoothedConfidence +=
         (detection.confidence - this.smoothedConfidence) * SMOOTHING
+
+      const obstacle = detectObstacles(videoFrame, detection)
+      this.lastObstacle = obstacle
+      this.smoothedSeverity +=
+        (obstacle.severity - this.smoothedSeverity) * SEVERITY_SMOOTHING
     }
 
     if (this.smoothedConfidence < CONFIDENCE_THRESHOLD) {
       this.lastState = {
         points: [],
-        speedSignal: 'maintain',
+        speedSignal: 'slow_down',
         turnSignal: 'straight',
         turnAngle: 0,
         confidence: this.smoothedConfidence,
@@ -79,10 +104,15 @@ export class CVPathEngine implements PathEngine {
       this.smoothedOffset,
       this.smoothedCurvature,
     )
+    const speedSignal = computeSpeedSignal(
+      this.smoothedConfidence,
+      this.smoothedSeverity,
+      signal,
+    )
 
     this.lastState = {
       points,
-      speedSignal: 'maintain',
+      speedSignal,
       turnSignal: signal,
       turnAngle: angle,
       confidence: this.smoothedConfidence,
@@ -92,5 +122,7 @@ export class CVPathEngine implements PathEngine {
 
   destroy(): void {
     this.lastDetection = null
+    this.lastObstacle = emptyObstacleResult()
+    resetObstacleDetector()
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PROC_H, PROC_W } from '../cv/laneDetector'
-import type { LaneDetectionResult } from '../cv/types'
+import type { LaneDetectionResult, ObstacleResult } from '../cv/types'
 import { CVPathEngine } from '../engines/CVPathEngine'
 import type { PathEngine, PathState } from '../types/path'
 
@@ -17,25 +17,26 @@ const CAPTURE_INTERVAL_MS = 100
 export interface PathLoopResult {
   pathState: PathState
   cvDetection: LaneDetectionResult | null
+  cvObstacle: ObstacleResult | null
 }
 
 export function usePathLoop(
   engine: PathEngine | null,
   active: boolean,
   videoElement: HTMLVideoElement | null,
-  needsFrames = true,
 ): PathLoopResult {
   const [pathState, setPathState] = useState<PathState>(DEFAULT_STATE)
-  const [cvDetection, setCvDetection] = useState<LaneDetectionResult | null>(null)
+  const [cvDetection, setCvDetection] = useState<LaneDetectionResult | null>(
+    null,
+  )
+  const [cvObstacle, setCvObstacle] = useState<ObstacleResult | null>(null)
   const engineRef = useRef(engine)
   const videoRef = useRef(videoElement)
-  const needsFramesRef = useRef(needsFrames)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
 
   engineRef.current = engine
   videoRef.current = videoElement
-  needsFramesRef.current = needsFrames
 
   useEffect(() => {
     if (!canvasRef.current) {
@@ -65,7 +66,6 @@ export function usePathLoop(
         const canvas = canvasRef.current
 
         if (
-          needsFramesRef.current &&
           video &&
           video.videoWidth > 0 &&
           canvas &&
@@ -83,6 +83,7 @@ export function usePathLoop(
           setPathState(state)
           if (currentEngine instanceof CVPathEngine) {
             setCvDetection(currentEngine.getLastDetection())
+            setCvObstacle(currentEngine.getLastObstacle())
           }
         }
       } catch (err) {
@@ -99,5 +100,5 @@ export function usePathLoop(
     }
   }, [engine, active])
 
-  return { pathState, cvDetection }
+  return { pathState, cvDetection, cvObstacle }
 }
