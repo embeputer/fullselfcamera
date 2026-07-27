@@ -7,13 +7,11 @@ import { LaneStatusHUD } from './components/LaneStatusHUD'
 import { SpeedHUD } from './components/SpeedHUD'
 import { StartScreen } from './components/StartScreen'
 import { TurnHUD } from './components/TurnHUD'
-import type { LaneDetectionResult } from './cv/types'
+import type { EngineType } from './engines'
 import {
   createPathEngine,
-  CVPathEngine,
   isDebugCV,
   parseEngineType,
-  type EngineType,
 } from './engines'
 import { useCamera } from './hooks/useCamera'
 import { usePathLoop } from './hooks/usePathLoop'
@@ -25,7 +23,6 @@ function App() {
   const engineType: EngineType = parseEngineType()
   const engineRef = useRef(createPathEngine(engineType))
   const [engineReady, setEngineReady] = useState(false)
-  const [debugDetection, setDebugDetection] = useState<LaneDetectionResult | null>(null)
   const debugCV = isDebugCV()
   const isCV = engineType === 'cv'
 
@@ -42,22 +39,12 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const pathState = usePathLoop(
+  const { pathState, cvDetection } = usePathLoop(
     engineReady ? engineRef.current : null,
     active,
     videoElement,
     isCV,
   )
-
-  useEffect(() => {
-    if (!debugCV || !(engineRef.current instanceof CVPathEngine)) return
-    const id = setInterval(() => {
-      setDebugDetection(engineRef.current instanceof CVPathEngine
-        ? engineRef.current.getLastDetection()
-        : null)
-    }, 100)
-    return () => clearInterval(id)
-  }, [debugCV, engineReady])
 
   useEffect(() => {
     engineRef.current.init().then(() => setEngineReady(true))
@@ -96,7 +83,12 @@ function App() {
       {status === 'active' && (
         <>
           <FSDOverlay pathState={pathState} />
-          {debugCV && <CVDebugOverlay detection={debugDetection} />}
+          {debugCV && (
+            <CVDebugOverlay
+              detection={cvDetection}
+              videoElement={videoElement}
+            />
+          )}
 
           <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
             <div className="flex items-start justify-between gap-4">

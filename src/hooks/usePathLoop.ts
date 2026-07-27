@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PROC_H, PROC_W } from '../cv/laneDetector'
+import type { LaneDetectionResult } from '../cv/types'
+import { CVPathEngine } from '../engines/CVPathEngine'
 import type { PathEngine, PathState } from '../types/path'
 
 const DEFAULT_STATE: PathState = {
@@ -12,13 +14,19 @@ const DEFAULT_STATE: PathState = {
 
 const CAPTURE_INTERVAL_MS = 100
 
+export interface PathLoopResult {
+  pathState: PathState
+  cvDetection: LaneDetectionResult | null
+}
+
 export function usePathLoop(
   engine: PathEngine | null,
   active: boolean,
   videoElement: HTMLVideoElement | null,
   needsFrames = true,
-): PathState {
+): PathLoopResult {
   const [pathState, setPathState] = useState<PathState>(DEFAULT_STATE)
+  const [cvDetection, setCvDetection] = useState<LaneDetectionResult | null>(null)
   const lastTimeRef = useRef<number | null>(null)
   const lastCaptureRef = useRef(0)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -68,7 +76,13 @@ export function usePathLoop(
         }
       }
 
-      setPathState(engine.update(deltaMs, frame))
+      const state = engine.update(deltaMs, frame)
+      setPathState(state)
+
+      if (engine instanceof CVPathEngine) {
+        setCvDetection(engine.getLastDetection())
+      }
+
       rafId = requestAnimationFrame(tick)
     }
 
@@ -80,5 +94,5 @@ export function usePathLoop(
     }
   }, [engine, active, videoElement, needsFrames])
 
-  return pathState
+  return { pathState, cvDetection }
 }
