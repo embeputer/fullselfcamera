@@ -2,10 +2,10 @@ import type { LaneDetectionResult, LanePoint } from './types'
 
 const PROC_W = 320
 const PROC_H = 180
-const ROI_START = 0.45
-const BAND_COUNT = 8
-const MIN_LANE_FRAC = 0.08
-const MAX_LANE_FRAC = 0.75
+const ROI_START = 0.35
+const BAND_COUNT = 10
+const MIN_LANE_FRAC = 0.06
+const MAX_LANE_FRAC = 0.65
 
 let grayBuf: Float32Array | null = null
 let edgeBuf: Uint8Array | null = null
@@ -83,10 +83,54 @@ function sobelEdges(gray: Float32Array, out: Uint8Array, w: number, h: number) {
     }
   }
 
-  const threshold = maxMag * 0.35
+  const threshold = maxMag * 0.18
   for (let i = 0; i < w * h; i++) {
     out[i] = mag[i] >= threshold ? 255 : 0
   }
+}
+
+function roiMean(gray: Float32Array, w: number, h: number): number {
+  const roiY = Math.floor(h * ROI_START)
+  let sum = 0
+  let count = 0
+  for (let y = roiY; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      sum += gray[y * w + x]
+      count++
+    }
+  }
+  return count > 0 ? sum / count : 128
+}
+
+function markDarkPixels(
+  gray: Float32Array,
+  combined: Uint8Array,
+  w: number,
+  h: number,
+  darkTh: number,
+) {
+  const roiY = Math.floor(h * ROI_START)
+  for (let y = roiY; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x
+      if (gray[idx] < darkTh) combined[idx] = 255
+    }
+  }
+}
+
+function clusterPositions(xs: number[], gap: number): number[] {
+  if (xs.length === 0) return []
+  const sorted = [...xs].sort((a, b) => a - b)
+  const clusters: number[][] = [[sorted[0]]]
+  for (let i = 1; i < sorted.length; i++) {
+    const last = clusters[clusters.length - 1]
+    if (sorted[i] - last[last.length - 1] <= gap) {
+      last.push(sorted[i])
+    } else {
+      clusters.push([sorted[i]])
+    }
+  }
+  return clusters.map((c) => c.reduce((a, b) => a + b, 0) / c.length)
 }
 
 interface LineFit {
@@ -95,78 +139,117 @@ interface LineFit {
   residual: number
 }
 
-function fitLine(points: LanePoint[]): LineFit | null {
+/** Fit x = slope * y + intercept (lanes are mostly vertical in image space). */
+function fitLineXofY(points: LanePoint[]): LineFit | null {
   if (points.length < 2) return null
 
-  let sumX = 0
   let sumY = 0
+  let sumX = 0
+  let sumYY = 0
   let sumXY = 0
-  let sumXX = 0
   const n = points.length
 
   for (const p of points) {
-    sumX += p.x
     sumY += p.y
+    sumX += p.x
+    sumYY += p.y * p.y
     sumXY += p.x * p.y
-    sumXX += p.x * p.x
   }
 
-  const denom = n * sumXX - sumX * sumX
+  const denom = n * sumYY - sumY * sumY
   if (Math.abs(denom) < 1e-6) return null
 
   const slope = (n * sumXY - sumX * sumY) / denom
-  const intercept = (sumY - slope * sumX) / n
+  const intercept = (sumX - slope * sumY) / n
 
   let residual = 0
   for (const p of points) {
-    residual += Math.abs(p.y - (slope * p.x + intercept))
+    residual += Math.abs(p.x - (slope * p.y + intercept))
   }
 
   return { slope, intercept, residual: residual / n }
 }
 
+function xAtY(fit: LineFit, y: number): number {
+  return fit.slope * y + fit.intercept
+}
+
+function findLanePairInRow(
+  combined: Uint8Array,
+  row: number,
+  w: number,
+): [number, number] | null {
+  const hits: number[] = []
+  for (let x = 2; x < w - 2; x++) {
+    if (combined[row + x] > 0) hits.push(x)
+  }
+  if (hits.length < 2) return null
+
+  const centers = clusterPositions(hits, 8)
+  if (centers.length < 2) return null
+
+  let best: [number, number] | null = null
+  let bestScore = -1
+
+  for (let i = 0; i < centers.length; i++) {
+    for (let j = i + 1; j < centers.length; j++) {
+      const left = Math.min(centers[i], centers[j])
+      const right = Math.max(centers[i], centers[j])
+      const width = (right - left) / w
+      if (width < MIN_LANE_FRAC || width > MAX_LANE_FRAC) continue
+
+      const mid = (left + right) / 2
+      const centerScore = 1 - Math.abs(mid - w / 2) / (w / 2)
+      const widthScore = 1 - Math.abs(width - 0.25) / 0.25
+      const score = centerScore * 0.7 + widthScore * 0.3
+
+      if (score > bestScore) {
+        bestScore = score
+        best = [left, right]
+      }
+    }
+  }
+
+  return best
+}
+
 function scanBands(
+  gray: Float32Array,
   edges: Uint8Array,
   w: number,
   h: number,
-): { left: LanePoint[]; right: LanePoint[]; strengths: number[] } {
+): {
+  left: LanePoint[]
+  right: LanePoint[]
+  strengths: number[]
+  combined: Uint8Array
+} {
   const roiY = Math.floor(h * ROI_START)
   const roiH = h - roiY
   const left: LanePoint[] = []
   const right: LanePoint[] = []
   const strengths: number[] = []
 
+  const mean = roiMean(gray, w, h)
+  const darkTh = mean * 0.82
+
+  const combined = new Uint8Array(w * h)
+  combined.set(edges)
+  markDarkPixels(gray, combined, w, h, darkTh)
+
   for (let b = 0; b < BAND_COUNT; b++) {
     const y = roiY + Math.floor(((b + 0.5) / BAND_COUNT) * roiH)
     const row = y * w
-    const center = Math.floor(w * 0.5)
-    const searchMargin = Math.floor(w * 0.08)
+    const pair = findLanePairInRow(combined, row, w)
 
-    let leftX = -1
-    let rightX = -1
-
-    for (let x = searchMargin; x < center - 4; x++) {
-      if (edges[row + x] > 0) {
-        leftX = x
-        break
-      }
-    }
-
-    for (let x = w - searchMargin - 1; x > center + 4; x--) {
-      if (edges[row + x] > 0) {
-        rightX = x
-        break
-      }
-    }
-
-    if (leftX >= 0 && rightX >= 0 && rightX > leftX) {
-      left.push({ x: leftX / w, y: y / h })
-      right.push({ x: rightX / w, y: y / h })
+    if (pair) {
+      left.push({ x: pair[0] / w, y: y / h })
+      right.push({ x: pair[1] / w, y: y / h })
       strengths.push(1)
     }
   }
 
-  return { left, right, strengths }
+  return { left, right, strengths, combined }
 }
 
 function emptyResult(): LaneDetectionResult {
@@ -195,28 +278,28 @@ function processImageData(scaled: ImageData): LaneDetectionResult {
   boxBlur(gray, w, h)
   sobelEdges(gray, edges, w, h)
 
-  const { left, right, strengths } = scanBands(edges, w, h)
+  const { left, right, strengths, combined } = scanBands(gray, edges, w, h)
 
   if (left.length < 3 || right.length < 3) {
-    return { ...emptyResult(), edgeMap: edges.slice(), width: w, height: h }
+    return { ...emptyResult(), edgeMap: combined.slice(), width: w, height: h }
   }
 
-  const leftFit = fitLine(left)
-  const rightFit = fitLine(right)
+  const leftFit = fitLineXofY(left)
+  const rightFit = fitLineXofY(right)
   if (!leftFit || !rightFit) {
-    return { ...emptyResult(), edgeMap: edges.slice(), width: w, height: h }
+    return { ...emptyResult(), edgeMap: combined.slice(), width: w, height: h }
   }
 
   const bottomY = 0.95
   const topY = ROI_START + 0.05
-  const leftBottom = (bottomY - leftFit.intercept) / leftFit.slope
-  const rightBottom = (bottomY - rightFit.intercept) / rightFit.slope
-  const leftTop = (topY - leftFit.intercept) / leftFit.slope
-  const rightTop = (topY - rightFit.intercept) / rightFit.slope
+  const leftBottom = xAtY(leftFit, bottomY)
+  const rightBottom = xAtY(rightFit, bottomY)
+  const leftTop = xAtY(leftFit, topY)
+  const rightTop = xAtY(rightFit, topY)
 
   const laneBottom = rightBottom - leftBottom
   if (laneBottom < MIN_LANE_FRAC || laneBottom > MAX_LANE_FRAC) {
-    return { ...emptyResult(), edgeMap: edges.slice(), width: w, height: h }
+    return { ...emptyResult(), edgeMap: combined.slice(), width: w, height: h }
   }
 
   const centerBottom = (leftBottom + rightBottom) / 2
@@ -233,15 +316,15 @@ function processImageData(scaled: ImageData): LaneDetectionResult {
 
   const edgeStrength =
     strengths.reduce((a, b) => a + b, 0) / strengths.length
-  const fitQuality = 1 - Math.min(1, (leftFit.residual + rightFit.residual) * 4)
-  const widthStability = 1 - Math.min(1, widthVariance * 40)
+  const fitQuality = 1 - Math.min(1, (leftFit.residual + rightFit.residual) * 8)
+  const widthStability = 1 - Math.min(1, widthVariance * 30)
   const coverage = Math.min(1, left.length / BAND_COUNT)
 
   const confidence =
-    edgeStrength * 0.3 +
+    edgeStrength * 0.25 +
     fitQuality * 0.3 +
     widthStability * 0.25 +
-    coverage * 0.15
+    coverage * 0.2
 
   return {
     centerOffset,
@@ -249,7 +332,7 @@ function processImageData(scaled: ImageData): LaneDetectionResult {
     confidence: Math.max(0, Math.min(1, confidence)),
     leftLine: left,
     rightLine: right,
-    edgeMap: edges.slice(),
+    edgeMap: combined.slice(),
     width: w,
     height: h,
   }
