@@ -56,6 +56,7 @@ export interface YoloRuntimeStatus {
   inferState: InferenceStatus
   inferError: string | null
   totalInferences: number
+  executionProvider: string | null
 }
 
 export interface LaneSegResult {
@@ -78,6 +79,7 @@ export interface LaneSegRuntimeStatus {
   inferState: InferenceStatus
   inferError: string | null
   totalInferences: number
+  executionProvider: string | null
 }
 
 export function emptyLaneSegResult(

@@ -40,6 +40,7 @@ function App() {
     mlObstacle,
     mlInferenceError,
     mlLaneInferMs,
+    mlExecutionProvider,
   } = usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
 
   useEffect(() => {
@@ -116,6 +117,7 @@ function App() {
               laneDetection={laneDetection}
               mlDetections={mlDetections}
               mlLaneInferMs={mlLaneInferMs}
+              mlExecutionProvider={mlExecutionProvider}
               videoElement={videoElement}
             />
           )}

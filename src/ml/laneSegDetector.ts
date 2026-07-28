@@ -1,9 +1,13 @@
-import * as ort from 'onnxruntime-web'
 import {
   LANE_INPUT_HEIGHT,
   LANE_INPUT_WIDTH,
   LANE_MODEL_PATH,
 } from './constants'
+import {
+  createOrtSession,
+  getActiveExecutionProvider,
+  ort,
+} from './ortSession'
 import {
   emptyLaneSegResult,
   type InferenceStatus,
@@ -23,12 +27,6 @@ const IS_DEV = import.meta.env.DEV
 
 function logDev(...args: unknown[]) {
   if (IS_DEV) console.log('[lane]', ...args)
-}
-
-function configureOrtWasm() {
-  ort.env.wasm.wasmPaths = `${import.meta.env.BASE_URL}ort/`
-  ort.env.wasm.numThreads = 1
-  ort.env.wasm.simd = true
 }
 
 function ensureFloatBuffer(size: number): Float32Array {
@@ -105,6 +103,7 @@ export function getLaneSegRuntimeStatus(): LaneSegRuntimeStatus {
     inferState,
     inferError,
     totalInferences,
+    executionProvider: getActiveExecutionProvider(),
   }
 }
 
@@ -114,7 +113,6 @@ export async function loadLaneSegModel(): Promise<void> {
 
   loadState = 'loading'
   loadError = null
-  configureOrtWasm()
   logDev(
     'loading model from',
     LANE_MODEL_PATH,
@@ -123,9 +121,7 @@ export async function loadLaneSegModel(): Promise<void> {
   )
 
   try {
-    session = await ort.InferenceSession.create(LANE_MODEL_PATH, {
-      executionProviders: ['wasm'],
-    })
+    session = await createOrtSession(LANE_MODEL_PATH, 'lane')
     loadState = 'ok'
     logDev('model ready', session.inputNames, session.outputNames)
   } catch (err) {

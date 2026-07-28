@@ -1,4 +1,3 @@
-import * as ort from 'onnxruntime-web'
 import {
   classNameForId,
   DETECTION_CONFIDENCE,
@@ -14,6 +13,11 @@ import {
   PROXIMITY_MIN_AREA,
   PROXIMITY_ZONE_START,
 } from './constants'
+import {
+  createOrtSession,
+  getActiveExecutionProvider,
+  ort,
+} from './ortSession'
 import {
   emptyDetectionResult,
   type Detection,
@@ -34,12 +38,6 @@ const IS_DEV = import.meta.env.DEV
 
 function logDev(...args: unknown[]) {
   if (IS_DEV) console.log('[yolo]', ...args)
-}
-
-function configureOrtWasm() {
-  ort.env.wasm.wasmPaths = `${import.meta.env.BASE_URL}ort/`
-  ort.env.wasm.numThreads = 1
-  ort.env.wasm.simd = true
 }
 
 function ensureFloatBuffer(size: number): Float32Array {
@@ -210,6 +208,7 @@ export function getYoloRuntimeStatus(): YoloRuntimeStatus {
     inferState,
     inferError,
     totalInferences,
+    executionProvider: getActiveExecutionProvider(),
   }
 }
 
@@ -219,13 +218,10 @@ export async function loadYoloModel(): Promise<void> {
 
   loadState = 'loading'
   loadError = null
-  configureOrtWasm()
   logDev('loading model from', MODEL_PATH, 'input', MODEL_INPUT_SIZE)
 
   try {
-    session = await ort.InferenceSession.create(MODEL_PATH, {
-      executionProviders: ['wasm'],
-    })
+    session = await createOrtSession(MODEL_PATH, 'yolo')
     loadState = 'ok'
     logDev('model ready', session.inputNames, session.outputNames)
   } catch (err) {

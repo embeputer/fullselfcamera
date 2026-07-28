@@ -1,5 +1,8 @@
 import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../ml/types'
-import { LANE_INFERENCE_INTERVAL_MS, ML_INFERENCE_INTERVAL_MS } from '../ml/constants'
+import {
+  getLaneInferenceIntervalMs,
+  getMlInferenceIntervalMs,
+} from '../ml/ortSession'
 import {
   destroyLaneSegModel,
   detectLaneMask,
@@ -112,8 +115,10 @@ export class MLPathEngine implements PathEngine {
 
   private scheduleInference(frame: ImageData) {
     const now = performance.now()
-    const yoloDue = now - this.lastYoloScheduled >= ML_INFERENCE_INTERVAL_MS
-    const laneDue = now - this.lastLaneScheduled >= LANE_INFERENCE_INTERVAL_MS
+    const mlInterval = getMlInferenceIntervalMs()
+    const laneInterval = getLaneInferenceIntervalMs()
+    const yoloDue = now - this.lastYoloScheduled >= mlInterval
+    const laneDue = now - this.lastLaneScheduled >= laneInterval
 
     if (!yoloDue && !laneDue) return
 

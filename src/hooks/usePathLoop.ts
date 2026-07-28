@@ -21,6 +21,7 @@ export interface PathLoopResult {
   mlObstacle: MLObstacleStatus | null
   mlInferenceError: string | null
   mlLaneInferMs: number | null
+  mlExecutionProvider: string | null
 }
 
 export function usePathLoop(
@@ -38,6 +39,9 @@ export function usePathLoop(
   const [mlObstacle, setMlObstacle] = useState<MLObstacleStatus | null>(null)
   const [mlInferenceError, setMlInferenceError] = useState<string | null>(null)
   const [mlLaneInferMs, setMlLaneInferMs] = useState<number | null>(null)
+  const [mlExecutionProvider, setMlExecutionProvider] = useState<string | null>(
+    null,
+  )
   const engineRef = useRef(engine)
   const videoRef = useRef(videoElement)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -95,6 +99,9 @@ export function usePathLoop(
           setMlObstacle(currentEngine.getLastObstacle())
           setMlInferenceError(detections.inferenceError)
           setMlLaneInferMs(currentEngine.getLastLaneInferMs())
+          setMlExecutionProvider(
+            currentEngine.getYoloStatus().executionProvider,
+          )
           const laneStatus = currentEngine.getLaneStatus()
           if (laneStatus.inferError && laneStatus.inferState === 'error') {
             setMlInferenceError(laneStatus.inferError)
@@ -121,5 +128,6 @@ export function usePathLoop(
     mlObstacle,
     mlInferenceError,
     mlLaneInferMs,
+    mlExecutionProvider,
   }
 }

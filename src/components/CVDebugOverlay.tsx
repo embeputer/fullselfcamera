@@ -6,6 +6,7 @@ interface MLDebugOverlayProps {
   laneDetection: LaneDetectionResult | null
   mlDetections?: DetectionResult | null
   mlLaneInferMs?: number | null
+  mlExecutionProvider?: string | null
   videoElement: HTMLVideoElement | null
 }
 
@@ -28,6 +29,7 @@ export function CVDebugOverlay({
   laneDetection,
   mlDetections,
   mlLaneInferMs,
+  mlExecutionProvider,
   videoElement,
 }: MLDebugOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -35,11 +37,13 @@ export function CVDebugOverlay({
   const laneRef = useRef(laneDetection)
   const mlRef = useRef(mlDetections)
   const laneMsRef = useRef(mlLaneInferMs)
+  const epRef = useRef(mlExecutionProvider)
   const videoRef = useRef(videoElement)
 
   laneRef.current = laneDetection
   mlRef.current = mlDetections
   laneMsRef.current = mlLaneInferMs
+  epRef.current = mlExecutionProvider
   videoRef.current = videoElement
 
   useEffect(() => {
@@ -157,7 +161,8 @@ export function CVDebugOverlay({
             ml.inferenceError && ml.inferenceStatus === 'error'
               ? ` · ${ml.inferenceError.slice(0, 30)}`
               : ''
-          labelRef.current.textContent = `lane ${conf} · ${laneMs} · ${infer} · sev ${sev} · ${n} · ${yoloMs}${err}`
+          const ep = epRef.current ?? '—'
+          labelRef.current.textContent = `ep ${ep} · lane ${conf} · ${laneMs} · ${infer} · sev ${sev} · ${n} · ${yoloMs}${err}`
         } else {
           labelRef.current.textContent = `lane ${conf}`
         }
