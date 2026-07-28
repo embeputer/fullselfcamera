@@ -95,6 +95,25 @@ function App() {
     <div className="relative h-dvh w-full overflow-hidden bg-black">
       <CameraFeed ref={videoRef} mirrored={isMirrored} className="absolute inset-0" />
 
+      {status === 'active' && engineError && (
+        <div className="pointer-events-none absolute left-0 right-0 top-[max(3.5rem,env(safe-area-inset-top))] z-20 flex justify-center px-4">
+          <p className="max-w-md rounded-lg border border-red-500/50 bg-red-950/90 px-3 py-2 text-center font-mono text-xs text-red-200">
+            ML error: {engineError}
+          </p>
+        </div>
+      )}
+
+      {status === 'active' &&
+        !engineError &&
+        mlDetections?.inferenceStatus === 'error' &&
+        mlDetections.inferenceError && (
+          <div className="pointer-events-none absolute left-0 right-0 top-[max(3.5rem,env(safe-area-inset-top))] z-20 flex justify-center px-4">
+            <p className="max-w-md rounded-lg border border-amber-500/50 bg-amber-950/90 px-3 py-2 text-center font-mono text-xs text-amber-200">
+              Inference failed: {mlDetections.inferenceError}
+            </p>
+          </div>
+        )}
+
       {status === 'active' && (
         <>
           <FSDOverlay pathState={pathState} />

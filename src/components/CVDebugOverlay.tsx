@@ -160,7 +160,19 @@ export function CVDebugOverlay({
           const sev = `${(ml.topHazardSeverity * 100).toFixed(0)}%`
           const n = `${ml.detections.length} det · ${ml.hazardCount} haz`
           const ms = `${ml.inferenceMs.toFixed(0)}ms`
-          labelRef.current.textContent = `conf ${conf} · sev ${sev} · ${n} · ${ms}`
+          const infer =
+            ml.inferenceStatus === 'error'
+              ? 'infer: FAIL'
+              : ml.inferenceStatus === 'running'
+                ? 'infer: run'
+                : ml.inferenceStatus === 'ok'
+                  ? 'infer: ok'
+                  : 'infer: —'
+          const err =
+            ml.inferenceError && ml.inferenceStatus === 'error'
+              ? ` · ${ml.inferenceError.slice(0, 40)}`
+              : ''
+          labelRef.current.textContent = `${infer} · conf ${conf} · sev ${sev} · ${n} · ${ms}${err}`
         } else {
           const sev = obs ? `${(obs.severity * 100).toFixed(0)}%` : '—'
           const clr = obs ? `${(obs.clearance * 100).toFixed(0)}%` : '—'

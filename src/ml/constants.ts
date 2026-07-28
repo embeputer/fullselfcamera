@@ -1,9 +1,8 @@
 /**
- * YOLO input size — 320 for mobile perf (vs 640 native).
- * YOLOv8 accepts multiples of 32; 320 keeps inference ~4× faster than 640
- * while still adequate for dashcam-scale frames (PROC_W is 320).
+ * YOLO input size — must match the exported ONNX graph (yolov8n.onnx is 640×640).
+ * Frames are letterboxed from PROC_W×PROC_H into this square tensor.
  */
-export const MODEL_INPUT_SIZE = 320
+export const MODEL_INPUT_SIZE = 640
 
 export const MODEL_PATH = '/models/yolov8n.onnx'
 

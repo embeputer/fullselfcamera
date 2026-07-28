@@ -100,9 +100,10 @@ export function usePathLoop(
           } else if (currentEngine instanceof MLPathEngine) {
             setCvDetection(currentEngine.getLastDetection())
             setCvObstacle(null)
-            setMlDetections(currentEngine.getLastDetections())
+            const detections = currentEngine.getLastDetections()
+            setMlDetections(detections)
             setMlObstacle(currentEngine.getLastObstacle())
-            setMlInferenceError(currentEngine.getLastInferenceError())
+            setMlInferenceError(detections.inferenceError)
           }
         }
       } catch (err) {

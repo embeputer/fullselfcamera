@@ -12,6 +12,13 @@ export interface Detection {
   isProximityHazard: boolean
 }
 
+export type InferenceStatus =
+  | 'idle'
+  | 'loading'
+  | 'running'
+  | 'ok'
+  | 'error'
+
 export interface DetectionResult {
   detections: Detection[]
   hazardCount: number
@@ -19,6 +26,17 @@ export interface DetectionResult {
   inferenceMs: number
   frameWidth: number
   frameHeight: number
+  inferenceStatus: InferenceStatus
+  inferenceError: string | null
+  totalInferences: number
+}
+
+export interface YoloRuntimeStatus {
+  loadState: InferenceStatus
+  loadError: string | null
+  inferState: InferenceStatus
+  inferError: string | null
+  totalInferences: number
 }
 
 /** Obstacle signal derived from ML detections — LaneStatusHUD compatible */
@@ -31,6 +49,8 @@ export interface MLObstacleStatus {
 export function emptyDetectionResult(
   frameWidth = 0,
   frameHeight = 0,
+  status: InferenceStatus = 'idle',
+  error: string | null = null,
 ): DetectionResult {
   return {
     detections: [],
@@ -39,6 +59,9 @@ export function emptyDetectionResult(
     inferenceMs: 0,
     frameWidth,
     frameHeight,
+    inferenceStatus: status,
+    inferenceError: error,
+    totalInferences: 0,
   }
 }
 

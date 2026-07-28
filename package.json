@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "copy-ort": "node scripts/copy-ort.mjs",
+    "predev": "npm run copy-ort",
     "dev": "vite",
+    "prebuild": "npm run copy-ort",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

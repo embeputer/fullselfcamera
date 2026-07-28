@@ -18,15 +18,26 @@ import {
   emptyDetectionResult,
   type Detection,
   type DetectionResult,
+  type InferenceStatus,
+  type YoloRuntimeStatus,
 } from './types'
-
-const ORT_VERSION = '1.27.0'
 
 let session: ort.InferenceSession | null = null
 let floatBuffer: Float32Array | null = null
+let loadState: InferenceStatus = 'idle'
+let loadError: string | null = null
+let inferState: InferenceStatus = 'idle'
+let inferError: string | null = null
+let totalInferences = 0
+
+const IS_DEV = import.meta.env.DEV
+
+function logDev(...args: unknown[]) {
+  if (IS_DEV) console.log('[yolo]', ...args)
+}
 
 function configureOrtWasm() {
-  ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`
+  ort.env.wasm.wasmPaths = `${import.meta.env.BASE_URL}ort/`
   ort.env.wasm.numThreads = 1
   ort.env.wasm.simd = true
 }
@@ -132,6 +143,7 @@ function confidenceThreshold(classId: number): number {
   return classId === 0 ? PERSON_CONFIDENCE : DETECTION_CONFIDENCE
 }
 
+/** YOLOv8 ONNX output is [1, 84, numBoxes] — 4 box coords + 80 COCO classes */
 function postprocess(
   output: Float32Array,
   dims: readonly number[],
@@ -191,17 +203,37 @@ function postprocess(
   return nms(raw, NMS_IOU_THRESHOLD)
 }
 
+export function getYoloRuntimeStatus(): YoloRuntimeStatus {
+  return {
+    loadState,
+    loadError,
+    inferState,
+    inferError,
+    totalInferences,
+  }
+}
+
 export async function loadYoloModel(): Promise<void> {
   if (session) return
+  if (loadState === 'loading') return
+
+  loadState = 'loading'
+  loadError = null
   configureOrtWasm()
+  logDev('loading model from', MODEL_PATH, 'input', MODEL_INPUT_SIZE)
+
   try {
     session = await ort.InferenceSession.create(MODEL_PATH, {
       executionProviders: ['wasm'],
     })
+    loadState = 'ok'
+    logDev('model ready', session.inputNames, session.outputNames)
   } catch (err) {
+    loadState = 'error'
+    loadError = err instanceof Error ? err.message : String(err)
     session = null
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new Error(`Failed to load YOLO model (${MODEL_PATH}): ${detail}`)
+    console.error('[yolo] model load failed:', loadError)
+    throw err
   }
 }
 
@@ -216,54 +248,86 @@ export async function detectObjects(
   const srcH = imageData.height
 
   if (!session) {
-    return emptyDetectionResult(srcW, srcH)
+    return emptyDetectionResult(
+      srcW,
+      srcH,
+      loadState === 'error' ? 'error' : 'idle',
+      loadError ?? 'Model not loaded',
+    )
   }
 
+  inferState = 'running'
   const t0 = performance.now()
-  const { tensor, scale, padX, padY } = preprocess(imageData)
 
-  const feeds: Record<string, ort.Tensor> = {}
-  const inputName = session.inputNames[0]
-  feeds[inputName] = tensor
+  try {
+    const { tensor, scale, padX, padY } = preprocess(imageData)
 
-  const results = await session.run(feeds)
-  const outputName = session.outputNames[0]
-  const output = results[outputName]
-  const data = output.data as Float32Array
-  const dims = output.dims
+    const feeds: Record<string, ort.Tensor> = {}
+    const inputName = session.inputNames[0]
+    feeds[inputName] = tensor
 
-  const detections = postprocess(
-    data,
-    dims,
-    srcW,
-    srcH,
-    scale,
-    padX,
-    padY,
-  )
+    const results = await session.run(feeds)
+    const outputName = session.outputNames[0]
+    const output = results[outputName]
+    const data = output.data as Float32Array
+    const dims = output.dims
 
-  const hazards = detections.filter((d) => d.isHazard || d.isProximityHazard)
-  let topHazardSeverity = 0
-  for (const d of hazards) {
-    const area = (d.x2 - d.x1) * (d.y2 - d.y1)
-    const cy = (d.y1 + d.y2) / 2
-    const s = d.confidence * area * (0.35 + cy * 0.65)
-    if (s > topHazardSeverity) topHazardSeverity = s
-  }
+    const detections = postprocess(
+      data,
+      dims,
+      srcW,
+      srcH,
+      scale,
+      padX,
+      padY,
+    )
 
-  const inferenceMs = performance.now() - t0
+    const hazards = detections.filter((d) => d.isHazard || d.isProximityHazard)
+    let topHazardSeverity = 0
+    for (const d of hazards) {
+      const area = (d.x2 - d.x1) * (d.y2 - d.y1)
+      const cy = (d.y1 + d.y2) / 2
+      const s = d.confidence * area * (0.35 + cy * 0.65)
+      if (s > topHazardSeverity) topHazardSeverity = s
+    }
 
-  return {
-    detections,
-    hazardCount: hazards.length,
-    topHazardSeverity: Math.min(1, topHazardSeverity * 8),
-    inferenceMs,
-    frameWidth: srcW,
-    frameHeight: srcH,
+    const inferenceMs = performance.now() - t0
+    totalInferences += 1
+    inferState = 'ok'
+    inferError = null
+
+    if (IS_DEV && totalInferences % 10 === 1) {
+      logDev(
+        `infer ok #${totalInferences}: ${detections.length} det, ${hazards.length} haz, ${inferenceMs.toFixed(0)}ms`,
+      )
+    }
+
+    return {
+      detections,
+      hazardCount: hazards.length,
+      topHazardSeverity: Math.min(1, topHazardSeverity * 8),
+      inferenceMs,
+      frameWidth: srcW,
+      frameHeight: srcH,
+      inferenceStatus: 'ok',
+      inferenceError: null,
+      totalInferences,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    inferState = 'error'
+    inferError = message
+    console.error('[yolo] inference failed:', message)
+    return emptyDetectionResult(srcW, srcH, 'error', message)
   }
 }
 
 export function destroyYoloModel(): void {
   session = null
   floatBuffer = null
+  loadState = 'idle'
+  loadError = null
+  inferState = 'idle'
+  inferError = null
+  totalInferences = 0
 }
