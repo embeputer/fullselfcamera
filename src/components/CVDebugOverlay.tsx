@@ -13,6 +13,17 @@ const HAZARD_COLOR = 'rgba(239, 68, 68, 0.9)'
 const PROXIMITY_COLOR = 'rgba(251, 146, 60, 0.9)'
 const OTHER_COLOR = 'rgba(96, 165, 250, 0.85)'
 
+const DEBUG_W = 200
+const DEBUG_H = Math.round((DEBUG_W * PROC_H) / PROC_W)
+
+function isVideoReady(video: HTMLVideoElement): boolean {
+  return (
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0
+  )
+}
+
 export function CVDebugOverlay({
   laneDetection,
   mlDetections,
@@ -34,11 +45,17 @@ export function CVDebugOverlay({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     canvas.width = PROC_W
     canvas.height = PROC_H
+
+    const maskCanvas = document.createElement('canvas')
+    maskCanvas.width = PROC_W
+    maskCanvas.height = PROC_H
+    const maskCtx = maskCanvas.getContext('2d')
+    if (!maskCtx) return
 
     let rafId: number
 
@@ -49,7 +66,7 @@ export function CVDebugOverlay({
       const w = PROC_W
       const h = PROC_H
 
-      if (video && video.videoWidth > 0) {
+      if (video && isVideoReady(video)) {
         ctx.drawImage(video, 0, 0, w, h)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.35)'
         ctx.fillRect(0, 0, w, h)
@@ -70,7 +87,8 @@ export function CVDebugOverlay({
       ctx.setLineDash([])
 
       if (lane?.edgeMap) {
-        const overlay = ctx.createImageData(w, h)
+        maskCtx.clearRect(0, 0, w, h)
+        const overlay = maskCtx.createImageData(w, h)
         for (let i = 0; i < lane.edgeMap.length; i++) {
           if (lane.edgeMap[i] > 0) {
             const p = i * 4
@@ -80,7 +98,8 @@ export function CVDebugOverlay({
             overlay.data[p + 3] = 120
           }
         }
-        ctx.putImageData(overlay, 0, 0)
+        maskCtx.putImageData(overlay, 0, 0)
+        ctx.drawImage(maskCanvas, 0, 0)
 
         ctx.fillStyle = '#22c55e'
         for (const p of lane.leftLine) {
@@ -152,13 +171,23 @@ export function CVDebugOverlay({
   }, [])
 
   return (
-    <div className="pointer-events-none absolute bottom-20 left-4 overflow-hidden rounded-lg border border-white/30 bg-black/70">
+    <div
+      className="pointer-events-none absolute bottom-20 left-4 inline-flex w-[200px] flex-col overflow-hidden rounded-lg border border-white/30"
+      style={{ maxWidth: DEBUG_W }}
+    >
       <canvas
         ref={canvasRef}
-        style={{ width: 200, height: 112, imageRendering: 'pixelated' }}
+        className="block"
+        style={{
+          width: DEBUG_W,
+          height: DEBUG_H,
+          imageRendering: 'pixelated',
+        }}
       />
-      <p className="px-2 py-1 font-mono text-[10px] text-white/60">
-        ML live — <span ref={labelRef}>—</span>
+      <p className="bg-black/70 px-1.5 py-0.5 font-mono text-[8px] leading-snug text-white/60 [text-wrap:pretty]">
+        <span className="line-clamp-2 break-words whitespace-normal">
+          ML — <span ref={labelRef}>—</span>
+        </span>
       </p>
     </div>
   )
