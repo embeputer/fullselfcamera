@@ -1,10 +1,13 @@
 /**
- * YOLO input size — must match the exported ONNX graph (yolov8n.onnx is 640×640).
+ * YOLO input size — must match the exported ONNX graph (yolov8n.onnx is 320×320).
  * Frames are letterboxed from PROC_W×PROC_H into this square tensor.
  */
-export const MODEL_INPUT_SIZE = 640
+export const MODEL_INPUT_SIZE = 320
 
 export const MODEL_PATH = '/models/yolov8n.onnx'
+
+/** Minimum ms between YOLO inferences (~6–7 FPS); lane CV still runs every capture tick */
+export const ML_INFERENCE_INTERVAL_MS = 150
 
 /** Confidence threshold for keeping a detection */
 export const DETECTION_CONFIDENCE = 0.25

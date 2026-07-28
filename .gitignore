@@ -12,6 +12,9 @@ dist
 dist-ssr
 public/ort
 *.local
+.venv-export
+yolov8n.pt
+yolov8n.onnx
 
 # Editor directories and files
 .vscode/*

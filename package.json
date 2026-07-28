@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "copy-ort": "node scripts/copy-ort.mjs",
+    "export-yolo": "node scripts/export-yolo.mjs",
+    "test-yolo": "node scripts/test-yolo.mjs",
     "predev": "npm run copy-ort",
     "dev": "vite",
     "prebuild": "npm run copy-ort",

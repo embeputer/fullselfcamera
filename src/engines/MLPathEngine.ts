@@ -1,5 +1,6 @@
 import { detectLanes } from '../cv/laneDetector'
 import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../cv/types'
+import { ML_INFERENCE_INTERVAL_MS } from '../ml/constants'
 import {
   computeMLSpeedSignal,
   obstacleStatusFromDetections,
@@ -49,6 +50,7 @@ export class MLPathEngine implements PathEngine {
   }
   private inferPending = false
   private pendingFrame: ImageData | null = null
+  private lastInferScheduled = 0
 
   async init(): Promise<void> {
     this.smoothedOffset = 0
@@ -60,6 +62,7 @@ export class MLPathEngine implements PathEngine {
     this.lastObstacle = emptyMLObstacleStatus()
     this.inferPending = false
     this.pendingFrame = null
+    this.lastInferScheduled = 0
     await loadYoloModel()
     this.lastState = {
       points: [],
@@ -87,6 +90,9 @@ export class MLPathEngine implements PathEngine {
   }
 
   private scheduleInference(frame: ImageData) {
+    const now = performance.now()
+    if (now - this.lastInferScheduled < ML_INFERENCE_INTERVAL_MS) return
+    this.lastInferScheduled = now
     this.pendingFrame = frame
     void this.drainInferenceQueue()
   }
