@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { PROC_H, PROC_W } from '../cv/laneDetector'
 import type { LaneDetectionResult, ObstacleResult } from '../cv/types'
 import { CVPathEngine } from '../engines/CVPathEngine'
+import { MLPathEngine } from '../engines/MLPathEngine'
+import type { DetectionResult, MLObstacleStatus } from '../ml/types'
 import type { PathEngine, PathState } from '../types/path'
 
 const DEFAULT_STATE: PathState = {
@@ -18,6 +20,8 @@ export interface PathLoopResult {
   pathState: PathState
   cvDetection: LaneDetectionResult | null
   cvObstacle: ObstacleResult | null
+  mlDetections: DetectionResult | null
+  mlObstacle: MLObstacleStatus | null
 }
 
 export function usePathLoop(
@@ -30,6 +34,10 @@ export function usePathLoop(
     null,
   )
   const [cvObstacle, setCvObstacle] = useState<ObstacleResult | null>(null)
+  const [mlDetections, setMlDetections] = useState<DetectionResult | null>(
+    null,
+  )
+  const [mlObstacle, setMlObstacle] = useState<MLObstacleStatus | null>(null)
   const engineRef = useRef(engine)
   const videoRef = useRef(videoElement)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -84,6 +92,13 @@ export function usePathLoop(
           if (currentEngine instanceof CVPathEngine) {
             setCvDetection(currentEngine.getLastDetection())
             setCvObstacle(currentEngine.getLastObstacle())
+            setMlDetections(null)
+            setMlObstacle(null)
+          } else if (currentEngine instanceof MLPathEngine) {
+            setCvDetection(currentEngine.getLastDetection())
+            setCvObstacle(null)
+            setMlDetections(currentEngine.getLastDetections())
+            setMlObstacle(currentEngine.getLastObstacle())
           }
         }
       } catch (err) {
@@ -100,5 +115,5 @@ export function usePathLoop(
     }
   }, [engine, active])
 
-  return { pathState, cvDetection, cvObstacle }
+  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle }
 }

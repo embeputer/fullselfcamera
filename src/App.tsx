@@ -7,7 +7,11 @@ import { LaneStatusHUD } from './components/LaneStatusHUD'
 import { SpeedHUD } from './components/SpeedHUD'
 import { StartScreen } from './components/StartScreen'
 import { TurnHUD } from './components/TurnHUD'
-import { createPathEngine, isDebugCV } from './engines'
+import {
+  createPathEngine,
+  getEngineMode,
+  isDebugCV,
+} from './engines'
 import { useCamera } from './hooks/useCamera'
 import { usePathLoop } from './hooks/usePathLoop'
 
@@ -17,7 +21,9 @@ function App() {
   const [phase, setPhase] = useState<AppPhase>('start')
   const engineRef = useRef(createPathEngine())
   const [engineReady, setEngineReady] = useState(false)
+  const [engineError, setEngineError] = useState<string | null>(null)
   const debugCV = isDebugCV()
+  const engineMode = getEngineMode()
 
   const {
     videoRef,
@@ -32,14 +38,21 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const { pathState, cvDetection, cvObstacle } = usePathLoop(
-    engineReady ? engineRef.current : null,
-    active,
-    videoElement,
-  )
+  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle } =
+    usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
 
   useEffect(() => {
-    engineRef.current.init().then(() => setEngineReady(true))
+    setEngineReady(false)
+    setEngineError(null)
+    engineRef.current
+      .init()
+      .then(() => setEngineReady(true))
+      .catch((err: unknown) => {
+        console.error('Engine init failed:', err)
+        setEngineError(
+          err instanceof Error ? err.message : 'Failed to load ML model',
+        )
+      })
     return () => engineRef.current.destroy()
   }, [])
 
@@ -58,12 +71,22 @@ function App() {
     setPhase('start')
   }, [stop])
 
+  const obstaclePresent = mlObstacle?.present ?? cvObstacle?.present
+  const obstacleSeverity = mlObstacle?.severity ?? cvObstacle?.severity
+
   if (phase === 'start') {
     return (
       <StartScreen
         onStart={handleStart}
-        loading={status === 'requesting'}
-        error={error}
+        loading={status === 'requesting' || !engineReady}
+        error={engineError ?? error}
+        subtitle={
+          !engineReady && !engineError
+            ? engineMode === 'ml'
+              ? 'Loading YOLO model…'
+              : 'Initializing engine…'
+            : undefined
+        }
       />
     )
   }
@@ -79,6 +102,7 @@ function App() {
             <CVDebugOverlay
               detection={cvDetection}
               obstacle={cvObstacle}
+              mlDetections={mlDetections}
               videoElement={videoElement}
             />
           )}
@@ -97,8 +121,8 @@ function App() {
             <div className="pointer-events-auto flex items-center justify-center gap-3">
               <LaneStatusHUD
                 confidence={pathState.confidence}
-                obstaclePresent={cvObstacle?.present}
-                obstacleSeverity={cvObstacle?.severity}
+                obstaclePresent={obstaclePresent}
+                obstacleSeverity={obstacleSeverity}
               />
               <CameraSwitcher
                 devices={devices}

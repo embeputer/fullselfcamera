@@ -2,9 +2,15 @@ interface StartScreenProps {
   onStart: () => void
   loading?: boolean
   error?: string | null
+  subtitle?: string
 }
 
-export function StartScreen({ onStart, loading, error }: StartScreenProps) {
+export function StartScreen({
+  onStart,
+  loading,
+  error,
+  subtitle,
+}: StartScreenProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center bg-black px-6 text-center">
       <div className="mb-8 max-w-sm">
@@ -29,7 +35,7 @@ export function StartScreen({ onStart, loading, error }: StartScreenProps) {
         disabled={loading}
         className="rounded-full bg-cyan-500 px-8 py-3 font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? 'Starting camera…' : 'Start Driving'}
+        {loading ? (subtitle ?? 'Starting camera…') : 'Start Driving'}
       </button>
 
       <p className="mt-6 max-w-xs text-xs text-white/30">
