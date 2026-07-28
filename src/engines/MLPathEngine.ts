@@ -1,6 +1,12 @@
-import { detectLanes } from '../cv/laneDetector'
 import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../cv/types'
-import { ML_INFERENCE_INTERVAL_MS } from '../ml/constants'
+import { LANE_INFERENCE_INTERVAL_MS, ML_INFERENCE_INTERVAL_MS } from '../ml/constants'
+import {
+  destroyLaneSegModel,
+  detectLaneMask,
+  getLaneSegRuntimeStatus,
+  loadLaneSegModel,
+} from '../ml/laneSegDetector'
+import { pathFromLaneMask } from '../ml/pathFromMask'
 import {
   computeMLSpeedSignal,
   obstacleStatusFromDetections,
@@ -48,9 +54,12 @@ export class MLPathEngine implements PathEngine {
     turnAngle: 0,
     confidence: 0,
   }
-  private inferPending = false
-  private pendingFrame: ImageData | null = null
-  private lastInferScheduled = 0
+  private yoloPending = false
+  private lanePending = false
+  private lastYoloScheduled = 0
+  private lastLaneScheduled = 0
+  private lastLaneInferMs = 0
+  private staggerLaneNext = true
 
   async init(): Promise<void> {
     this.smoothedOffset = 0
@@ -60,10 +69,14 @@ export class MLPathEngine implements PathEngine {
     this.lastDetection = null
     this.lastDetections = emptyDetectionResult()
     this.lastObstacle = emptyMLObstacleStatus()
-    this.inferPending = false
-    this.pendingFrame = null
-    this.lastInferScheduled = 0
-    await loadYoloModel()
+    this.yoloPending = false
+    this.lanePending = false
+    this.lastYoloScheduled = 0
+    this.lastLaneScheduled = 0
+    this.staggerLaneNext = true
+
+    await Promise.all([loadYoloModel(), loadLaneSegModel()])
+
     this.lastState = {
       points: [],
       speedSignal: 'slow_down',
@@ -89,22 +102,87 @@ export class MLPathEngine implements PathEngine {
     return getYoloRuntimeStatus()
   }
 
-  private scheduleInference(frame: ImageData) {
-    const now = performance.now()
-    if (now - this.lastInferScheduled < ML_INFERENCE_INTERVAL_MS) return
-    this.lastInferScheduled = now
-    this.pendingFrame = frame
-    void this.drainInferenceQueue()
+  getLaneStatus() {
+    return getLaneSegRuntimeStatus()
   }
 
-  private async drainInferenceQueue() {
-    if (this.inferPending) return
+  getLastLaneInferMs(): number {
+    return this.lastLaneInferMs
+  }
 
-    const frame = this.pendingFrame
-    if (!frame) return
+  private scheduleInference(frame: ImageData) {
+    const now = performance.now()
+    const yoloDue = now - this.lastYoloScheduled >= ML_INFERENCE_INTERVAL_MS
+    const laneDue = now - this.lastLaneScheduled >= LANE_INFERENCE_INTERVAL_MS
 
-    this.pendingFrame = null
-    this.inferPending = true
+    if (!yoloDue && !laneDue) return
+
+    if (yoloDue && laneDue && this.yoloPending && this.lanePending) {
+      return
+    }
+
+    if (yoloDue && laneDue) {
+      if (this.staggerLaneNext) {
+        if (!this.lanePending) {
+          this.lastLaneScheduled = now
+          void this.runLaneInference(frame)
+        }
+        this.staggerLaneNext = false
+      } else if (!this.yoloPending) {
+        this.lastYoloScheduled = now
+        void this.runYoloInference(frame)
+        this.staggerLaneNext = true
+      }
+      return
+    }
+
+    if (laneDue && !this.lanePending) {
+      this.lastLaneScheduled = now
+      void this.runLaneInference(frame)
+    }
+    if (yoloDue && !this.yoloPending) {
+      this.lastYoloScheduled = now
+      void this.runYoloInference(frame)
+    }
+  }
+
+  private async runLaneInference(frame: ImageData) {
+    if (this.lanePending) return
+    this.lanePending = true
+
+    try {
+      const seg = await detectLaneMask(frame)
+      if (seg.inferenceStatus === 'ok' && seg.mask.length > 0) {
+        this.lastLaneInferMs = seg.inferenceMs
+        const detection = pathFromLaneMask(
+          seg.mask,
+          seg.maskWidth,
+          seg.maskHeight,
+        )
+        detection.confidence = Math.max(
+          detection.confidence,
+          seg.confidence * 0.5,
+        )
+        this.lastDetection = detection
+
+        this.smoothedOffset +=
+          (detection.centerOffset - this.smoothedOffset) * SMOOTHING
+        this.smoothedCurvature +=
+          (detection.curvature - this.smoothedCurvature) * SMOOTHING
+        this.smoothedConfidence +=
+          (detection.confidence - this.smoothedConfidence) * SMOOTHING
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Lane inference error:', message)
+    } finally {
+      this.lanePending = false
+    }
+  }
+
+  private async runYoloInference(frame: ImageData) {
+    if (this.yoloPending) return
+    this.yoloPending = true
 
     try {
       const result = await detectObjects(frame)
@@ -123,25 +201,12 @@ export class MLPathEngine implements PathEngine {
         message,
       )
     } finally {
-      this.inferPending = false
-      if (this.pendingFrame) {
-        void this.drainInferenceQueue()
-      }
+      this.yoloPending = false
     }
   }
 
   update(_deltaMs: number, videoFrame?: ImageData): PathState {
     if (videoFrame) {
-      const detection = detectLanes(videoFrame)
-      this.lastDetection = detection
-
-      this.smoothedOffset +=
-        (detection.centerOffset - this.smoothedOffset) * SMOOTHING
-      this.smoothedCurvature +=
-        (detection.curvature - this.smoothedCurvature) * SMOOTHING
-      this.smoothedConfidence +=
-        (detection.confidence - this.smoothedConfidence) * SMOOTHING
-
       this.scheduleInference(videoFrame)
     }
 
@@ -181,7 +246,7 @@ export class MLPathEngine implements PathEngine {
     this.lastDetection = null
     this.lastDetections = emptyDetectionResult()
     this.lastObstacle = emptyMLObstacleStatus()
-    this.pendingFrame = null
     destroyYoloModel()
+    destroyLaneSegModel()
   }
 }

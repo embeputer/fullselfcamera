@@ -38,7 +38,7 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError } =
+  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError, mlLaneInferMs } =
     usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function App() {
       .catch((err: unknown) => {
         console.error('Engine init failed:', err)
         setEngineError(
-          err instanceof Error ? err.message : 'Failed to load ML model',
+          err instanceof Error ? err.message : 'Failed to load ML models',
         )
       })
     return () => engineRef.current.destroy()
@@ -83,7 +83,7 @@ function App() {
         subtitle={
           !engineReady && !engineError
             ? engineMode === 'ml'
-              ? 'Loading YOLO model…'
+              ? 'Loading YOLO + lane models…'
               : 'Initializing engine…'
             : undefined
         }
@@ -122,6 +122,7 @@ function App() {
               detection={cvDetection}
               obstacle={cvObstacle}
               mlDetections={mlDetections}
+              mlLaneInferMs={mlLaneInferMs}
               videoElement={videoElement}
             />
           )}

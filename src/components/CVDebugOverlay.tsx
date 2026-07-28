@@ -8,6 +8,7 @@ interface CVDebugOverlayProps {
   detection: LaneDetectionResult | null
   obstacle: ObstacleResult | null
   mlDetections?: DetectionResult | null
+  mlLaneInferMs?: number | null
   videoElement: HTMLVideoElement | null
 }
 
@@ -19,6 +20,7 @@ export function CVDebugOverlay({
   detection,
   obstacle,
   mlDetections,
+  mlLaneInferMs,
   videoElement,
 }: CVDebugOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -26,11 +28,13 @@ export function CVDebugOverlay({
   const detectionRef = useRef(detection)
   const obstacleRef = useRef(obstacle)
   const mlRef = useRef(mlDetections)
+  const laneMsRef = useRef(mlLaneInferMs)
   const videoRef = useRef(videoElement)
 
   detectionRef.current = detection
   obstacleRef.current = obstacle
   mlRef.current = mlDetections
+  laneMsRef.current = mlLaneInferMs
   videoRef.current = videoElement
 
   useEffect(() => {
@@ -75,13 +79,21 @@ export function CVDebugOverlay({
 
       if (det?.edgeMap) {
         const overlay = ctx.createImageData(w, h)
+        const isMlLane = Boolean(ml)
         for (let i = 0; i < det.edgeMap.length; i++) {
           if (det.edgeMap[i] > 0) {
             const p = i * 4
-            overlay.data[p] = 0
-            overlay.data[p + 1] = 200
-            overlay.data[p + 2] = 255
-            overlay.data[p + 3] = 180
+            if (isMlLane) {
+              overlay.data[p] = 34
+              overlay.data[p + 1] = 197
+              overlay.data[p + 2] = 94
+              overlay.data[p + 3] = 120
+            } else {
+              overlay.data[p] = 0
+              overlay.data[p + 1] = 200
+              overlay.data[p + 2] = 255
+              overlay.data[p + 3] = 180
+            }
           }
         }
         ctx.putImageData(overlay, 0, 0)
@@ -159,20 +171,23 @@ export function CVDebugOverlay({
         if (ml) {
           const sev = `${(ml.topHazardSeverity * 100).toFixed(0)}%`
           const n = `${ml.detections.length} det · ${ml.hazardCount} haz`
-          const ms = `${ml.inferenceMs.toFixed(0)}ms`
+          const yoloMs = `${ml.inferenceMs.toFixed(0)}ms`
+          const laneMs = laneMsRef.current
+            ? `${laneMsRef.current.toFixed(0)}ms`
+            : '—'
           const infer =
             ml.inferenceStatus === 'error'
-              ? 'infer: FAIL'
+              ? 'yolo: FAIL'
               : ml.inferenceStatus === 'running'
-                ? 'infer: run'
+                ? 'yolo: run'
                 : ml.inferenceStatus === 'ok'
-                  ? 'infer: ok'
-                  : 'infer: —'
+                  ? 'yolo: ok'
+                  : 'yolo: —'
           const err =
             ml.inferenceError && ml.inferenceStatus === 'error'
-              ? ` · ${ml.inferenceError.slice(0, 40)}`
+              ? ` · ${ml.inferenceError.slice(0, 30)}`
               : ''
-          labelRef.current.textContent = `${infer} · conf ${conf} · sev ${sev} · ${n} · ${ms}${err}`
+          labelRef.current.textContent = `lane ${conf} · ${laneMs} · ${infer} · sev ${sev} · ${n} · ${yoloMs}${err}`
         } else {
           const sev = obs ? `${(obs.severity * 100).toFixed(0)}%` : '—'
           const clr = obs ? `${(obs.clearance * 100).toFixed(0)}%` : '—'
@@ -187,7 +202,7 @@ export function CVDebugOverlay({
     return () => cancelAnimationFrame(rafId)
   }, [])
 
-  const modeLabel = mlDetections ? 'ML+CV' : 'CV'
+  const modeLabel = mlDetections ? 'ML' : 'CV'
 
   return (
     <div className="pointer-events-none absolute bottom-20 left-4 overflow-hidden rounded-lg border border-white/30 bg-black/70">

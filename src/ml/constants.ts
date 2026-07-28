@@ -6,8 +6,19 @@ export const MODEL_INPUT_SIZE = 320
 
 export const MODEL_PATH = '/models/yolov8n.onnx'
 
-/** Minimum ms between YOLO inferences (~6–7 FPS); lane CV still runs every capture tick */
+/** Minimum ms between YOLO inferences (~6–7 FPS) */
 export const ML_INFERENCE_INTERVAL_MS = 150
+
+/**
+ * TwinLiteNet lane/drivable segmentation — must match lane_seg.onnx graph (640×360).
+ * Model: harrylal/TwinLiteNet-onnxruntime (based on chequanghuy/TwinLiteNet).
+ */
+export const LANE_MODEL_PATH = '/models/lane_seg.onnx'
+export const LANE_INPUT_WIDTH = 640
+export const LANE_INPUT_HEIGHT = 360
+
+/** Minimum ms between lane-seg inferences (~8 FPS) */
+export const LANE_INFERENCE_INTERVAL_MS = 125
 
 /** Confidence threshold for keeping a detection */
 export const DETECTION_CONFIDENCE = 0.25

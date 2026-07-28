@@ -23,6 +23,7 @@ export interface PathLoopResult {
   mlDetections: DetectionResult | null
   mlObstacle: MLObstacleStatus | null
   mlInferenceError: string | null
+  mlLaneInferMs: number | null
 }
 
 export function usePathLoop(
@@ -40,6 +41,7 @@ export function usePathLoop(
   )
   const [mlObstacle, setMlObstacle] = useState<MLObstacleStatus | null>(null)
   const [mlInferenceError, setMlInferenceError] = useState<string | null>(null)
+  const [mlLaneInferMs, setMlLaneInferMs] = useState<number | null>(null)
   const engineRef = useRef(engine)
   const videoRef = useRef(videoElement)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -97,6 +99,7 @@ export function usePathLoop(
             setMlDetections(null)
             setMlObstacle(null)
             setMlInferenceError(null)
+            setMlLaneInferMs(null)
           } else if (currentEngine instanceof MLPathEngine) {
             setCvDetection(currentEngine.getLastDetection())
             setCvObstacle(null)
@@ -104,6 +107,11 @@ export function usePathLoop(
             setMlDetections(detections)
             setMlObstacle(currentEngine.getLastObstacle())
             setMlInferenceError(detections.inferenceError)
+            setMlLaneInferMs(currentEngine.getLastLaneInferMs())
+            const laneStatus = currentEngine.getLaneStatus()
+            if (laneStatus.inferError && laneStatus.inferState === 'error') {
+              setMlInferenceError(laneStatus.inferError)
+            }
           }
         }
       } catch (err) {
@@ -120,5 +128,5 @@ export function usePathLoop(
     }
   }, [engine, active])
 
-  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError }
+  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError, mlLaneInferMs }
 }

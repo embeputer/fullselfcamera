@@ -6,7 +6,9 @@
   "scripts": {
     "copy-ort": "node scripts/copy-ort.mjs",
     "export-yolo": "node scripts/export-yolo.mjs",
+    "export-lane": "node scripts/export-lane.mjs",
     "test-yolo": "node scripts/test-yolo.mjs",
+    "test-lane": "node scripts/test-lane.mjs",
     "predev": "npm run copy-ort",
     "dev": "vite",
     "prebuild": "npm run copy-ort",
