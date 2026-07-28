@@ -1,7 +1,5 @@
-import {
-  CONFIDENCE_THRESHOLD,
-  OBSTACLE_SEVERITY_MILD,
-} from '../cv/types'
+import { OBSTACLE_SEVERITY_MILD } from '../ml/constants'
+import { CONFIDENCE_THRESHOLD } from '../ml/types'
 
 interface LaneStatusHUDProps {
   confidence: number

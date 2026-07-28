@@ -1,3 +1,7 @@
+/** Downscaled camera frame size for ML inference */
+export const PROC_W = 320
+export const PROC_H = 180
+
 /**
  * YOLO input size — must match the exported ONNX graph (yolov8n.onnx is 320×320).
  * Frames are letterboxed from PROC_W×PROC_H into this square tensor.

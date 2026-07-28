@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { PROC_H, PROC_W } from '../cv/laneDetector'
-import type { LaneDetectionResult, ObstacleResult } from '../cv/types'
-import { CVPathEngine } from '../engines/CVPathEngine'
+import { PROC_H, PROC_W } from '../ml/constants'
+import type { DetectionResult, LaneDetectionResult, MLObstacleStatus } from '../ml/types'
 import { MLPathEngine } from '../engines/MLPathEngine'
-import type { DetectionResult, MLObstacleStatus } from '../ml/types'
 import type { PathEngine, PathState } from '../types/path'
 
 const DEFAULT_STATE: PathState = {
@@ -18,8 +16,7 @@ const CAPTURE_INTERVAL_MS = 100
 
 export interface PathLoopResult {
   pathState: PathState
-  cvDetection: LaneDetectionResult | null
-  cvObstacle: ObstacleResult | null
+  laneDetection: LaneDetectionResult | null
   mlDetections: DetectionResult | null
   mlObstacle: MLObstacleStatus | null
   mlInferenceError: string | null
@@ -32,10 +29,9 @@ export function usePathLoop(
   videoElement: HTMLVideoElement | null,
 ): PathLoopResult {
   const [pathState, setPathState] = useState<PathState>(DEFAULT_STATE)
-  const [cvDetection, setCvDetection] = useState<LaneDetectionResult | null>(
+  const [laneDetection, setLaneDetection] = useState<LaneDetectionResult | null>(
     null,
   )
-  const [cvObstacle, setCvObstacle] = useState<ObstacleResult | null>(null)
   const [mlDetections, setMlDetections] = useState<DetectionResult | null>(
     null,
   )
@@ -90,28 +86,18 @@ export function usePathLoop(
         }
 
         const currentEngine = engineRef.current
-        if (currentEngine) {
+        if (currentEngine instanceof MLPathEngine) {
           const state = currentEngine.update(deltaMs, frame)
           setPathState(state)
-          if (currentEngine instanceof CVPathEngine) {
-            setCvDetection(currentEngine.getLastDetection())
-            setCvObstacle(currentEngine.getLastObstacle())
-            setMlDetections(null)
-            setMlObstacle(null)
-            setMlInferenceError(null)
-            setMlLaneInferMs(null)
-          } else if (currentEngine instanceof MLPathEngine) {
-            setCvDetection(currentEngine.getLastDetection())
-            setCvObstacle(null)
-            const detections = currentEngine.getLastDetections()
-            setMlDetections(detections)
-            setMlObstacle(currentEngine.getLastObstacle())
-            setMlInferenceError(detections.inferenceError)
-            setMlLaneInferMs(currentEngine.getLastLaneInferMs())
-            const laneStatus = currentEngine.getLaneStatus()
-            if (laneStatus.inferError && laneStatus.inferState === 'error') {
-              setMlInferenceError(laneStatus.inferError)
-            }
+          setLaneDetection(currentEngine.getLastDetection())
+          const detections = currentEngine.getLastDetections()
+          setMlDetections(detections)
+          setMlObstacle(currentEngine.getLastObstacle())
+          setMlInferenceError(detections.inferenceError)
+          setMlLaneInferMs(currentEngine.getLastLaneInferMs())
+          const laneStatus = currentEngine.getLaneStatus()
+          if (laneStatus.inferError && laneStatus.inferState === 'error') {
+            setMlInferenceError(laneStatus.inferError)
           }
         }
       } catch (err) {
@@ -128,5 +114,12 @@ export function usePathLoop(
     }
   }, [engine, active])
 
-  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError, mlLaneInferMs }
+  return {
+    pathState,
+    laneDetection,
+    mlDetections,
+    mlObstacle,
+    mlInferenceError,
+    mlLaneInferMs,
+  }
 }

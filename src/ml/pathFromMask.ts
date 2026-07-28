@@ -1,6 +1,5 @@
-import type { LaneDetectionResult } from '../cv/types'
-import { PROC_H, PROC_W } from '../cv/laneDetector'
-import { HOOD_ZONE_START } from './constants'
+import type { LaneDetectionResult } from './types'
+import { HOOD_ZONE_START, PROC_H, PROC_W } from './constants'
 
 const ROI_START = 0.35
 const BAND_COUNT = 10

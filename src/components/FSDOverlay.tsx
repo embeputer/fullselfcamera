@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { CONFIDENCE_THRESHOLD } from '../cv/types'
+import { CONFIDENCE_THRESHOLD } from '../ml/types'
 import type { PathState } from '../types/path'
 import {
   buildPathRibbon,

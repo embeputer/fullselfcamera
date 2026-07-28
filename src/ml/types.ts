@@ -1,3 +1,22 @@
+export const CONFIDENCE_THRESHOLD = 0.35
+
+export interface LanePoint {
+  x: number
+  y: number
+}
+
+export interface LaneDetectionResult {
+  centerOffset: number
+  curvature: number
+  confidence: number
+  leftLine: LanePoint[]
+  rightLine: LanePoint[]
+  /** Lane segmentation mask (downsampled) for debug overlay */
+  edgeMap: Uint8Array | null
+  width: number
+  height: number
+}
+
 export interface Detection {
   /** Normalized [0,1] bounding box */
   x1: number

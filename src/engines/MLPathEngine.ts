@@ -1,4 +1,4 @@
-import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../cv/types'
+import { CONFIDENCE_THRESHOLD, type LaneDetectionResult } from '../ml/types'
 import { LANE_INFERENCE_INTERVAL_MS, ML_INFERENCE_INTERVAL_MS } from '../ml/constants'
 import {
   destroyLaneSegModel,

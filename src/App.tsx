@@ -7,11 +7,7 @@ import { LaneStatusHUD } from './components/LaneStatusHUD'
 import { SpeedHUD } from './components/SpeedHUD'
 import { StartScreen } from './components/StartScreen'
 import { TurnHUD } from './components/TurnHUD'
-import {
-  createPathEngine,
-  getEngineMode,
-  isDebugCV,
-} from './engines'
+import { createPathEngine, isDebugML } from './engines'
 import { useCamera } from './hooks/useCamera'
 import { usePathLoop } from './hooks/usePathLoop'
 
@@ -22,8 +18,7 @@ function App() {
   const engineRef = useRef(createPathEngine())
   const [engineReady, setEngineReady] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
-  const debugCV = isDebugCV()
-  const engineMode = getEngineMode()
+  const debugML = isDebugML()
 
   const {
     videoRef,
@@ -38,8 +33,14 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError, mlLaneInferMs } =
-    usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
+  const {
+    pathState,
+    laneDetection,
+    mlDetections,
+    mlObstacle,
+    mlInferenceError,
+    mlLaneInferMs,
+  } = usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
 
   useEffect(() => {
     setEngineReady(false)
@@ -71,9 +72,6 @@ function App() {
     setPhase('start')
   }, [stop])
 
-  const obstaclePresent = mlObstacle?.present ?? cvObstacle?.present
-  const obstacleSeverity = mlObstacle?.severity ?? cvObstacle?.severity
-
   if (phase === 'start') {
     return (
       <StartScreen
@@ -81,11 +79,7 @@ function App() {
         loading={status === 'requesting' || !engineReady}
         error={engineError ?? error}
         subtitle={
-          !engineReady && !engineError
-            ? engineMode === 'ml'
-              ? 'Loading YOLO + lane models…'
-              : 'Initializing engine…'
-            : undefined
+          !engineReady && !engineError ? 'Loading YOLO + lane models…' : undefined
         }
       />
     )
@@ -117,10 +111,9 @@ function App() {
       {status === 'active' && (
         <>
           <FSDOverlay pathState={pathState} />
-          {debugCV && (
+          {debugML && (
             <CVDebugOverlay
-              detection={cvDetection}
-              obstacle={cvObstacle}
+              laneDetection={laneDetection}
               mlDetections={mlDetections}
               mlLaneInferMs={mlLaneInferMs}
               videoElement={videoElement}
@@ -145,22 +138,22 @@ function App() {
                 </p>
               )}
               <div className="flex items-center justify-center gap-3">
-              <LaneStatusHUD
-                confidence={pathState.confidence}
-                obstaclePresent={obstaclePresent}
-                obstacleSeverity={obstacleSeverity}
-              />
-              <CameraSwitcher
-                devices={devices}
-                activeDeviceId={activeDeviceId}
-                onSwitch={(id) => void switchCamera(id)}
-              />
-              <button
-                onClick={handleStop}
-                className="rounded-full border border-white/20 bg-black/50 px-5 py-2 text-xs font-medium text-white/70 backdrop-blur-sm transition hover:bg-black/70 hover:text-white"
-              >
-                Stop
-              </button>
+                <LaneStatusHUD
+                  confidence={pathState.confidence}
+                  obstaclePresent={mlObstacle?.present}
+                  obstacleSeverity={mlObstacle?.severity}
+                />
+                <CameraSwitcher
+                  devices={devices}
+                  activeDeviceId={activeDeviceId}
+                  onSwitch={(id) => void switchCamera(id)}
+                />
+                <button
+                  onClick={handleStop}
+                  className="rounded-full border border-white/20 bg-black/50 px-5 py-2 text-xs font-medium text-white/70 backdrop-blur-sm transition hover:bg-black/70 hover:text-white"
+                >
+                  Stop
+                </button>
               </div>
             </div>
           </div>

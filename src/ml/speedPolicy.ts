@@ -1,12 +1,11 @@
 import type { SpeedSignal, TurnSignal } from '../types/path'
-import { CONFIDENCE_THRESHOLD } from '../cv/types'
 import {
   OBSTACLE_PRESENT_THRESHOLD,
   OBSTACLE_SEVERITY_MILD,
   PATH_CORRIDOR_LEFT,
   PATH_CORRIDOR_RIGHT,
 } from './constants'
-import type { Detection, MLObstacleStatus } from './types'
+import { CONFIDENCE_THRESHOLD, type Detection, type MLObstacleStatus } from './types'
 
 function boxArea(d: Detection): number {
   return (d.x2 - d.x1) * (d.y2 - d.y1)
