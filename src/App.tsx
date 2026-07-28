@@ -38,7 +38,7 @@ function App() {
     stop,
   } = useCamera()
   const active = phase === 'driving' && status === 'active'
-  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle } =
+  const { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError } =
     usePathLoop(engineReady ? engineRef.current : null, active, videoElement)
 
   useEffect(() => {
@@ -118,7 +118,13 @@ function App() {
               />
             </div>
 
-            <div className="pointer-events-auto flex items-center justify-center gap-3">
+            <div className="pointer-events-auto flex flex-col items-center justify-center gap-2">
+              {mlInferenceError && (
+                <p className="rounded-full border border-red-400/40 bg-red-950/60 px-3 py-1 font-mono text-[10px] text-red-200">
+                  ML error: {mlInferenceError}
+                </p>
+              )}
+              <div className="flex items-center justify-center gap-3">
               <LaneStatusHUD
                 confidence={pathState.confidence}
                 obstaclePresent={obstaclePresent}
@@ -135,6 +141,7 @@ function App() {
               >
                 Stop
               </button>
+              </div>
             </div>
           </div>
         </>

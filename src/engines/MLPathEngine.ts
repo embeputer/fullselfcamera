@@ -35,6 +35,7 @@ export class MLPathEngine implements PathEngine {
   private lastDetection: LaneDetectionResult | null = null
   private lastDetections: DetectionResult = emptyDetectionResult()
   private lastObstacle: MLObstacleStatus = emptyMLObstacleStatus()
+  private lastInferenceError: string | null = null
   private lastState: PathState = {
     points: [],
     speedSignal: 'slow_down',
@@ -43,6 +44,7 @@ export class MLPathEngine implements PathEngine {
     confidence: 0,
   }
   private inferPending = false
+  private queuedFrame: ImageData | null = null
 
   async init(): Promise<void> {
     this.smoothedOffset = 0
@@ -52,7 +54,9 @@ export class MLPathEngine implements PathEngine {
     this.lastDetection = null
     this.lastDetections = emptyDetectionResult()
     this.lastObstacle = emptyMLObstacleStatus()
+    this.lastInferenceError = null
     this.inferPending = false
+    this.queuedFrame = null
     await loadYoloModel()
     this.lastState = {
       points: [],
@@ -75,6 +79,38 @@ export class MLPathEngine implements PathEngine {
     return this.lastObstacle
   }
 
+  getLastInferenceError(): string | null {
+    return this.lastInferenceError
+  }
+
+  private runInference(frame: ImageData): void {
+    this.inferPending = true
+    void detectObjects(frame)
+      .then((result) => {
+        this.lastInferenceError = null
+        this.lastDetections = result
+        const obstacle = obstacleStatusFromDetections(result.detections)
+        this.lastObstacle = obstacle
+        this.smoothedSeverity +=
+          (obstacle.severity - this.smoothedSeverity) * SEVERITY_SMOOTHING
+      })
+      .catch((err: unknown) => {
+        const message =
+          err instanceof Error ? err.message : 'YOLO inference failed'
+        this.lastInferenceError = message
+        console.error('YOLO inference error:', err)
+      })
+      .finally(() => {
+        const next = this.queuedFrame
+        this.queuedFrame = null
+        if (next) {
+          this.runInference(next)
+        } else {
+          this.inferPending = false
+        }
+      })
+  }
+
   update(_deltaMs: number, videoFrame?: ImageData): PathState {
     if (videoFrame) {
       const detection = detectLanes(videoFrame)
@@ -88,28 +124,20 @@ export class MLPathEngine implements PathEngine {
         (detection.confidence - this.smoothedConfidence) * SMOOTHING
 
       if (!this.inferPending) {
-        this.inferPending = true
-        void detectObjects(videoFrame)
-          .then((result) => {
-            this.lastDetections = result
-            const obstacle = obstacleStatusFromDetections(result.detections)
-            this.lastObstacle = obstacle
-            this.smoothedSeverity +=
-              (obstacle.severity - this.smoothedSeverity) * SEVERITY_SMOOTHING
-          })
-          .catch((err) => {
-            console.error('YOLO inference error:', err)
-          })
-          .finally(() => {
-            this.inferPending = false
-          })
+        this.runInference(videoFrame)
+      } else {
+        this.queuedFrame = videoFrame
       }
     }
 
     if (this.smoothedConfidence < CONFIDENCE_THRESHOLD) {
       this.lastState = {
         points: [],
-        speedSignal: 'slow_down',
+        speedSignal: computeMLSpeedSignal(
+          this.smoothedConfidence,
+          this.smoothedSeverity,
+          'straight',
+        ),
         turnSignal: 'straight',
         turnAngle: 0,
         confidence: this.smoothedConfidence,
@@ -142,6 +170,8 @@ export class MLPathEngine implements PathEngine {
     this.lastDetection = null
     this.lastDetections = emptyDetectionResult()
     this.lastObstacle = emptyMLObstacleStatus()
+    this.lastInferenceError = null
+    this.queuedFrame = null
     destroyYoloModel()
   }
 }

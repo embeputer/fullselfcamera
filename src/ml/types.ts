@@ -8,6 +8,8 @@ export interface Detection {
   className: string
   confidence: number
   isHazard: boolean
+  /** Large in-path blob in lower frame — triggers even without a hazard COCO class */
+  isProximityHazard: boolean
 }
 
 export interface DetectionResult {

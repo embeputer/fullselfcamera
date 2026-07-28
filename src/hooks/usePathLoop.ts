@@ -22,6 +22,7 @@ export interface PathLoopResult {
   cvObstacle: ObstacleResult | null
   mlDetections: DetectionResult | null
   mlObstacle: MLObstacleStatus | null
+  mlInferenceError: string | null
 }
 
 export function usePathLoop(
@@ -38,6 +39,7 @@ export function usePathLoop(
     null,
   )
   const [mlObstacle, setMlObstacle] = useState<MLObstacleStatus | null>(null)
+  const [mlInferenceError, setMlInferenceError] = useState<string | null>(null)
   const engineRef = useRef(engine)
   const videoRef = useRef(videoElement)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -94,11 +96,13 @@ export function usePathLoop(
             setCvObstacle(currentEngine.getLastObstacle())
             setMlDetections(null)
             setMlObstacle(null)
+            setMlInferenceError(null)
           } else if (currentEngine instanceof MLPathEngine) {
             setCvDetection(currentEngine.getLastDetection())
             setCvObstacle(null)
             setMlDetections(currentEngine.getLastDetections())
             setMlObstacle(currentEngine.getLastObstacle())
+            setMlInferenceError(currentEngine.getLastInferenceError())
           }
         }
       } catch (err) {
@@ -115,5 +119,5 @@ export function usePathLoop(
     }
   }, [engine, active])
 
-  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle }
+  return { pathState, cvDetection, cvObstacle, mlDetections, mlObstacle, mlInferenceError }
 }

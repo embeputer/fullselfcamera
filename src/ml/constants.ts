@@ -8,20 +8,35 @@ export const MODEL_INPUT_SIZE = 320
 export const MODEL_PATH = '/models/yolov8n.onnx'
 
 /** Confidence threshold for keeping a detection */
-export const DETECTION_CONFIDENCE = 0.35
+export const DETECTION_CONFIDENCE = 0.25
+
+/** Person class gets a lower bar — partial bodies / close-up hands often score low */
+export const PERSON_CONFIDENCE = 0.2
 
 /** NMS IoU threshold */
 export const NMS_IOU_THRESHOLD = 0.45
 
-/** Bottom fraction of frame treated as hood — exclude detections whose center falls here */
+/** Bottom fraction of frame treated as hood — small detections here are filtered as dashcam hood */
 export const HOOD_ZONE_START = 0.82
+
+/** Large boxes in the hood zone are kept as close-proximity hazards (hand, person leaning in) */
+export const HOOD_KEEP_MIN_AREA = 0.04
+
+/** Lower frame fraction where large in-path blobs count as proximity hazards */
+export const PROXIMITY_ZONE_START = 0.45
+
+/** Minimum normalized box area to treat a non-hazard class as a proximity hazard */
+export const PROXIMITY_MIN_AREA = 0.05
 
 /** Horizontal path corridor (normalized) — hazards outside are lower priority */
 export const PATH_CORRIDOR_LEFT = 0.2
 export const PATH_CORRIDOR_RIGHT = 0.8
 
-export const OBSTACLE_SEVERITY_MILD = 0.35
+export const OBSTACLE_SEVERITY_MILD = 0.25
 export const OBSTACLE_SEVERITY_HARD = 0.7
+
+/** Severity floor for marking obstacle present in HUD */
+export const OBSTACLE_PRESENT_THRESHOLD = 0.1
 
 /** COCO 80 class names (index = class id) */
 export const COCO_CLASSES: readonly string[] = [

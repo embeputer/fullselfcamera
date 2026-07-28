@@ -2,11 +2,17 @@ import * as ort from 'onnxruntime-web'
 import {
   classNameForId,
   DETECTION_CONFIDENCE,
+  HOOD_KEEP_MIN_AREA,
   HOOD_ZONE_START,
   isHazardClass,
   MODEL_INPUT_SIZE,
   MODEL_PATH,
   NMS_IOU_THRESHOLD,
+  PATH_CORRIDOR_LEFT,
+  PATH_CORRIDOR_RIGHT,
+  PERSON_CONFIDENCE,
+  PROXIMITY_MIN_AREA,
+  PROXIMITY_ZONE_START,
 } from './constants'
 import {
   emptyDetectionResult,
@@ -103,9 +109,27 @@ function nms(boxes: Detection[], iouThreshold: number): Detection[] {
   return kept
 }
 
-function isInHoodZone(d: Detection): boolean {
+function boxArea(d: Pick<Detection, 'x1' | 'y1' | 'x2' | 'y2'>): number {
+  return (d.x2 - d.x1) * (d.y2 - d.y1)
+}
+
+function isHoodNoise(d: Detection): boolean {
   const cy = (d.y1 + d.y2) / 2
-  return cy >= HOOD_ZONE_START
+  if (cy < HOOD_ZONE_START) return false
+  return boxArea(d) < HOOD_KEEP_MIN_AREA
+}
+
+function isProximityHazard(d: Detection): boolean {
+  const cx = (d.x1 + d.x2) / 2
+  const cy = (d.y1 + d.y2) / 2
+  const area = boxArea(d)
+  const inPath =
+    cx >= PATH_CORRIDOR_LEFT && cx <= PATH_CORRIDOR_RIGHT
+  return inPath && area >= PROXIMITY_MIN_AREA && cy >= PROXIMITY_ZONE_START
+}
+
+function confidenceThreshold(classId: number): number {
+  return classId === 0 ? PERSON_CONFIDENCE : DETECTION_CONFIDENCE
 }
 
 function postprocess(
@@ -132,7 +156,7 @@ function postprocess(
         maxClass = c
       }
     }
-    if (maxScore < DETECTION_CONFIDENCE) continue
+    if (maxScore < confidenceThreshold(maxClass)) continue
 
     const cx = output[0 * numBoxes + i]
     const cy = output[1 * numBoxes + i]
@@ -153,9 +177,13 @@ function postprocess(
       className: classNameForId(maxClass),
       confidence: maxScore,
       isHazard: isHazardClass(maxClass),
+      isProximityHazard: false,
     }
 
-    if (!isInHoodZone(detection)) {
+    detection.isProximityHazard =
+      !detection.isHazard && isProximityHazard(detection)
+
+    if (!isHoodNoise(detection)) {
       raw.push(detection)
     }
   }
@@ -166,9 +194,15 @@ function postprocess(
 export async function loadYoloModel(): Promise<void> {
   if (session) return
   configureOrtWasm()
-  session = await ort.InferenceSession.create(MODEL_PATH, {
-    executionProviders: ['wasm'],
-  })
+  try {
+    session = await ort.InferenceSession.create(MODEL_PATH, {
+      executionProviders: ['wasm'],
+    })
+  } catch (err) {
+    session = null
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to load YOLO model (${MODEL_PATH}): ${detail}`)
+  }
 }
 
 export function isYoloLoaded(): boolean {
@@ -208,7 +242,7 @@ export async function detectObjects(
     padY,
   )
 
-  const hazards = detections.filter((d) => d.isHazard)
+  const hazards = detections.filter((d) => d.isHazard || d.isProximityHazard)
   let topHazardSeverity = 0
   for (const d of hazards) {
     const area = (d.x2 - d.x1) * (d.y2 - d.y1)

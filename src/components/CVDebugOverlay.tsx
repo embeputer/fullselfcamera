@@ -12,6 +12,7 @@ interface CVDebugOverlayProps {
 }
 
 const HAZARD_COLOR = 'rgba(239, 68, 68, 0.9)'
+const PROXIMITY_COLOR = 'rgba(251, 146, 60, 0.9)'
 const OTHER_COLOR = 'rgba(96, 165, 250, 0.85)'
 
 export function CVDebugOverlay({
@@ -138,9 +139,13 @@ export function CVDebugOverlay({
           const by = d.y1 * h
           const bw = (d.x2 - d.x1) * w
           const bh = (d.y2 - d.y1) * h
-          const color = d.isHazard ? HAZARD_COLOR : OTHER_COLOR
+          const color = d.isHazard
+            ? HAZARD_COLOR
+            : d.isProximityHazard
+              ? PROXIMITY_COLOR
+              : OTHER_COLOR
           ctx.strokeStyle = color
-          ctx.lineWidth = d.isHazard ? 2 : 1
+          ctx.lineWidth = d.isHazard || d.isProximityHazard ? 2 : 1
           ctx.strokeRect(bx, by, bw, bh)
           const label = `${d.className} ${(d.confidence * 100).toFixed(0)}%`
           ctx.font = '9px monospace'

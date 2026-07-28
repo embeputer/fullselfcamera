@@ -16,11 +16,11 @@ export function LaneStatusHUD({
 }: LaneStatusHUDProps) {
   const detected = confidence >= CONFIDENCE_THRESHOLD
   const blocked =
-    detected && (obstaclePresent || obstacleSeverity >= OBSTACLE_SEVERITY_MILD)
+    obstaclePresent || obstacleSeverity >= OBSTACLE_SEVERITY_MILD
 
   let color = '#eab308'
   let label = 'SEARCHING'
-  if (detected && blocked) {
+  if (blocked) {
     color = '#ef4444'
     label = 'OBSTACLE'
   } else if (detected) {
