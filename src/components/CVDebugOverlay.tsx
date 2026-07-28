@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HOOD_ZONE_START, PROC_H, PROC_W } from '../ml/constants'
 import type { DetectionResult, LaneDetectionResult } from '../ml/types'
 
@@ -14,8 +14,17 @@ const HAZARD_COLOR = 'rgba(239, 68, 68, 0.9)'
 const PROXIMITY_COLOR = 'rgba(251, 146, 60, 0.9)'
 const OTHER_COLOR = 'rgba(96, 165, 250, 0.85)'
 
-const DEBUG_W = 200
-const DEBUG_H = Math.round((DEBUG_W * PROC_H) / PROC_W)
+const DEBUG_SIZES = [
+  { id: 's', label: 'S', width: 200 },
+  { id: 'm', label: 'M', width: 320 },
+  { id: 'l', label: 'L', width: 480 },
+] as const
+
+type DebugSizeId = (typeof DEBUG_SIZES)[number]['id']
+
+function debugHeight(width: number): number {
+  return Math.round((width * PROC_H) / PROC_W)
+}
 
 function isVideoReady(video: HTMLVideoElement): boolean {
   return (
@@ -32,6 +41,19 @@ export function CVDebugOverlay({
   mlExecutionProvider,
   videoElement,
 }: MLDebugOverlayProps) {
+  const [sizeId, setSizeId] = useState<DebugSizeId>('s')
+  const size =
+    DEBUG_SIZES.find((s) => s.id === sizeId) ?? DEBUG_SIZES[0]
+  const displayW = size.width
+  const displayH = debugHeight(displayW)
+
+  const cycleSize = () => {
+    setSizeId((current) => {
+      const idx = DEBUG_SIZES.findIndex((s) => s.id === current)
+      return DEBUG_SIZES[(idx + 1) % DEBUG_SIZES.length].id
+    })
+  }
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const labelRef = useRef<HTMLSpanElement>(null)
   const laneRef = useRef(laneDetection)
@@ -177,21 +199,32 @@ export function CVDebugOverlay({
 
   return (
     <div
-      className="pointer-events-none absolute bottom-20 left-4 inline-flex w-[200px] flex-col overflow-hidden rounded-lg border border-white/30"
-      style={{ maxWidth: DEBUG_W }}
+      className="absolute bottom-20 left-4 inline-flex flex-col overflow-hidden rounded-lg border border-white/30 bg-black/80 shadow-lg"
+      style={{ width: displayW }}
     >
+      <div className="flex items-center justify-between gap-1 border-b border-white/10 bg-black/90 px-1.5 py-0.5">
+        <span className="font-mono text-[9px] text-white/50">ML debug</span>
+        <button
+          type="button"
+          onClick={cycleSize}
+          className="pointer-events-auto rounded px-1.5 py-0.5 font-mono text-[10px] text-white/80 transition hover:bg-white/15 active:bg-white/25"
+          title="Cycle debug window size (S → M → L)"
+          aria-label={`Debug size ${size.label}, tap to enlarge`}
+        >
+          {size.label} □
+        </button>
+      </div>
       <canvas
         ref={canvasRef}
-        className="block"
+        className="block w-full"
         style={{
-          width: DEBUG_W,
-          height: DEBUG_H,
+          height: displayH,
           imageRendering: 'pixelated',
         }}
       />
       <p className="bg-black/70 px-1.5 py-0.5 font-mono text-[8px] leading-snug text-white/60 [text-wrap:pretty]">
         <span className="line-clamp-2 break-words whitespace-normal">
-          ML — <span ref={labelRef}>—</span>
+          <span ref={labelRef}>—</span>
         </span>
       </p>
     </div>
