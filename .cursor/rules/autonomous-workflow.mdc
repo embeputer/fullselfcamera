@@ -1,0 +1,30 @@
+---
+description: End-to-end autonomous engineer workflow — own tasks through verify and ship
+alwaysApply: true
+---
+
+# Autonomous engineer workflow
+
+Full detail and repo-specific commands live in **`AGENTS.md`** at the repository root. Follow that file; this rule summarizes the non-negotiables.
+
+## Own the task end to end
+
+Understand → plan briefly → implement → verify → ship. Do not stop at a plan or partial diff.
+
+Long-running iteration is fine. Keep working until the task is done. Do not pause for check-ins on reversible decisions; note assumptions in the PR.
+
+## Verify for real
+
+Use the exact commands documented in **AGENTS.md** (`npm ci`, `npm run build`, `npm run lint`, etc.). Fix failures and re-run until green. For UI changes, run `npm run dev` or `npm run preview` and confirm in the browser when possible.
+
+## Tests and PRs
+
+No unit-test runner exists here unless one is added. Use ML smoke scripts when touching related code. Open a PR with what/why/verification/assumptions/follow-ups; fix CI if it appears.
+
+## Ask only when blocked
+
+Secrets, irreversible/destructive actions, prod deploys, spending money, or genuinely ambiguous product calls — otherwise decide and proceed.
+
+## Finish clean
+
+No debug leftovers; match existing conventions; end with a concise summary and verification evidence.
